@@ -10,7 +10,26 @@ class YoteGame implements ActionListener {
 
     }
 
-    public void movePiece(Piece piece, String move) {
+    public void testAndMovePiece(Piece nearPiece, Piece farPiece, int axis, String move) {
+        if(nearPiece != null && (axis>1 && (move.equals("u") || move.equals("l"))) ||
+          (axis<4 && move.equals("r")) || (axis<3 && move.equals("d"))) {
+            if(!(nearPiece.player.equals(this.selected.player)) && farPiece == null) {
+                movePiece(move, this.selected, nearPiece);
+            } else {
+                System.out.println("Jogada Invalida");
+            }
+        } else if((axis>0 && (move.equals("u") || move.equals("l"))) || (axis<5 && move.equals("r")) || (axis<4 && move.equals("d"))) {
+            if(nearPiece == null) {
+                movePiece(move, this.selected, null);
+            } else {
+                System.out.println("Jogada Invalida");
+            }
+        } else {
+            System.out.println("Jogada Invalida");
+        }
+    }
+
+    public void movePiece(String move, Piece movedPiece, Piece killedPiece) {
 
     }
 
@@ -18,28 +37,26 @@ class YoteGame implements ActionListener {
     void actionPerformed(ActionEvent e) {
         String action = e.getActionCommand();
         String param = e.paramString();
+        System.out.println("Action:  " + action + "\nParam:  " + param);
         if(action == ""){
+            int i = this.selected.getPosition()[0];
+            int j = this.selected.getPosition()[1];
             if(param == "up") {
-                int pos[] = this.selected.getPosition();
-                Piece nearPiece = (pos[0] > 0) ? this.board.getPiece(pos[0]-1, pos[1]) : null;
-                Piece farPiece  = (pos[0] > 1) ? this.board.getPiece(pos[0]-2, pos[1]) : null;
-                if(pos[0] > 1) {
-                    if(nearPiece == null) {
-                        movePiece(, "up");
-                    } else if(!(nearPiece.player.equals(this.selected.player)) && farPiece == null) {
-
-                    }
-                } else if(pos[0] > 0) {
-
-                } else {
-                    System.out.println("Jogada Invalida");
-                }
+                Piece nearPiece = i > 0 ? this.board.getPiece(i-1, j) : null;
+                Piece farPiece  = i > 1 ? this.board.getPiece(i-2, j) : null;
+                testAndMovePiece(nearPiece, farPiece, i, "u");
             } else if(param == "down") {
-
+                Piece nearPiece = i < 4 ? this.board.getPiece(i+1, j) : null;
+                Piece farPiece  = i < 3 ? this.board.getPiece(i+2, j) : null;
+                testAndMovePiece(nearPiece, farPiece, i, "d");
             } else if(param == "left") {
-
+                Piece nearPiece = j > 0 ? this.board.getPiece(i, j-1) : null;
+                Piece farPiece  = j > 1 ? this.board.getPiece(i, j-2) : null;
+                testAndMovePiece(nearPiece, farPiece, j, "l");
             } else if(param == "right") {
-
+                Piece nearPiece = j < 5 ? this.board.getPiece(i, j+1) : null;
+                Piece farPiece  = j < 4 ? this.board.getPiece(i, j+2) : null;
+                testAndMovePiece(nearPiece, farPiece, j, "r");
             }
         }
     }
@@ -50,9 +67,9 @@ private class Board {
     private ImageView boardImg;
 
     public void Board() {
-        for(int i=0; i<5; i++) {
+        for(int i=0; i < 5; i++) {
             boardMatrix.add(new ArrayList<Piece>());
-            for(int j=0; j<6; j++) {
+            for(int j=0; j < 6; j++) {
                 boardMatrix.get(i).add(null);
             }
         }
