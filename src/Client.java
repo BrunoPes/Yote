@@ -1,18 +1,17 @@
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
-import java.util.Scanner;
 
 class ClientThreadReader extends Thread {
 	private DataInputStream input = null;
 	private Socket socket = null;
 	private String readMsg = "";
 	private Client client;
-	
+
 	public ClientThreadReader(Socket socket, Client client) {
 		this.socket = socket;
 		this.client = client;
-		
+
 		try {
 			this.input = new DataInputStream(this.socket.getInputStream());
 			this.start();
@@ -25,7 +24,12 @@ class ClientThreadReader extends Thread {
 		while (true) {
 			try {
 				this.readMsg = this.input.readUTF();
-				this.client.receivedMovement(this.readMsg);
+				System.out.println(this.readMsg);
+				if(readMsg.indexOf("s:") >= 0) {
+					this.client.chatUpdateMessage(this.readMsg);
+				} else {
+					this.client.receivedMovement(this.readMsg);
+				}
 			} catch(Exception e) {
 				e.printStackTrace();
 			}
@@ -65,33 +69,30 @@ class Client {
 	public String getLastSentMessage() {
 		return this.sendMsg;
 	}
-	
-	public void sendChatMsg() {
-		Scanner console = new Scanner(System.in);
-		try {			
-			while(!sendMsg.equals(".")) {
-				System.out.println("Envie uma mensagem: ");
-				String sendMsg = console.nextLine();
-				this.output.writeUTF(sendMsg);
-				this.output.flush();
-			}
-			this.output.close();
-			console.close();
-		} catch(Exception e) {
+
+	public void sendChatMsg(String msg) {
+		try {
+			this.output.writeUTF("s:"+msg);
+		} catch(Exception e){
 			System.out.println(e);
 		}
 	}
-	
-	public void receivedMovement(String json) {		
+
+	public void chatUpdateMessage(String msg) {
+		String chatMsg = (new MessageHelper(msg)).getChatMessage();
+		if(chatMsg != null) this.clientGame.updateChat(chatMsg);
+	}
+
+	public void receivedMovement(String json) {
 		MessageHelper jsonObj = new MessageHelper(json);
 		int player = jsonObj.getPlayer();
 		String move = jsonObj.getAction();
 		int[] movedPos = jsonObj.getMovedPos();
 		int[] killedPos = jsonObj.getKilledPos();
-		
+
 		this.clientGame.updateGame(player, move, movedPos, killedPos);
 	}
-	
+
 	public void sendMovement(String move, int[] movedPiece) {
 		try {
 			this.output.writeUTF("a:"+move+",m:"+movedPiece[0]+""+movedPiece[1]);
