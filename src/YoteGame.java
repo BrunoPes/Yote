@@ -1,4 +1,5 @@
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.GridLayout;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
@@ -6,17 +7,21 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 
 import javax.swing.BorderFactory;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
 class YoteGame extends JFrame implements MouseListener, KeyListener {
     private static final long serialVersionUID = 1L;
-    private Piece selected;
-    private Board board = new Board();
-    private Player p1 = new Player(new Color((float)70/255,(float)70/255,(float)70/255), "Player 1");
-    private Player p2 = new Player(new Color((float)210/255,(float)210/255,(float)210/255), "Player 2");
+    private int id;
+    private int[] selected;
+    private boolean isMyTurn = false;
+    private JPanel gameBoard;
+    private Client client;
+    private Color playerCol;
+    private Color otherCol;
 
-    public YoteGame(int width, int height) {
+    public YoteGame(int width, int height, String[] args) {
         super("Joguinho do YOTE!");
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setBounds(100, 100, width, height);
@@ -28,11 +33,11 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
         left.setBounds(0,1, 200, height-30);
         left.setBackground(Color.WHITE);
         left.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        JPanel gameBoard = new JPanel(new GridLayout(5, 6, 0, 0));
-        gameBoard.setBounds(left.getWidth()+left.getX(),0,width-400, height-28);
-        gameBoard.setName("board");
+        this.gameBoard = new JPanel(new GridLayout(5, 6, 0, 0));
+        this.gameBoard.setBounds(left.getWidth()+left.getX(),0,width-400, height-28);
+        this.gameBoard.setName("board");
         JPanel right = new JPanel();
-        right.setBounds(gameBoard.getWidth()+gameBoard.getX(), 1, 200, height-30);
+        right.setBounds(this.gameBoard.getWidth()+this.gameBoard.getX(), 1, 200, height-30);
         right.setBackground(Color.WHITE);
         right.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
 
@@ -43,92 +48,110 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
                 space.setBorder(BorderFactory.createLineBorder(Color.BLACK, 2));
                 space.addMouseListener(this);
                 space.setName(i+""+j);
-                gameBoard.add(space);
+                this.gameBoard.add(space);
             }
         }
 
         this.getContentPane().add(left);
-        this.getContentPane().add(gameBoard);
+        this.getContentPane().add(this.gameBoard);
         this.getContentPane().add(right);
         this.setVisible(true);
+        this.client = new Client(args, this);
     }
 
-    public void testAndMovePiece(Piece nearPiece, Piece farPiece, int axis, String move) {
-        if(nearPiece != null && (axis>1 && (move.equals("u") || move.equals("l"))) ||
-          (axis<4 && move.equals("r")) || (axis<3 && move.equals("d"))) {
-            if(!(nearPiece.getColor().equals(this.selected.getColor())) && farPiece == null) {
-                movePiece(move, this.selected, nearPiece);
-            } else {
-                System.out.println("Jogada Invalida");
+    public JPanel getFieldInPos(int i, int j) {
+        for(Component comp : this.gameBoard.getComponents()) {
+            if(comp instanceof JComponent) {
+                if(((JPanel)comp).getName().equals(i+""+j))
+                    return ((JPanel)comp);
             }
-        } else if((axis>0 && (move.equals("u") || move.equals("l"))) || (axis<5 && move.equals("r")) || (axis<4 && move.equals("d"))) {
-            if(nearPiece == null) {
-                movePiece(move, this.selected, null);
+        }
+        return null;
+    }
+    
+    public void updateGame(int player, String action, int[] movedPiece, int[] killedPiece) {
+        if(action.equals("c")) {
+            this.id = player;
+            this.playerCol = this.id == 0 ? Color.BLACK : Color.WHITE;
+            this.otherCol = this.id == 0 ? Color.WHITE : Color.BLACK;
+        } else if(action.equals("t")) {
+            this.isMyTurn = (player == this.id) ? true : false;
+            //if(player == this.id) System.out.println("MY TURN!!");
+        } else if(action.equals("i")) {
+            Piece newPiece = new Piece(player == this.id ? this.playerCol : this.otherCol);
+            JPanel field = this.getFieldInPos(movedPiece[0], movedPiece[1]);
+            field.setLayout(null);
+            field.add(newPiece);
+            field.updateUI();
+        } else if(action.equals("u") || action.equals("d") || action.equals("l") || action.equals("r")) {
+            boolean anyKill = (killedPiece != null) ? true : false;
+            JPanel oldField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
+            JPanel killField = anyKill ? this.getFieldInPos(killedPiece[0], killedPiece[1]) : null;
+            JPanel newField;
+            
+            if(action.equals("u")) {
+                newField = this.getFieldInPos(movedPiece[0] + (anyKill ? -2 : -1), movedPiece[1]);          
+            } else if(action.equals("d")) {
+                newField = this.getFieldInPos(movedPiece[0] + (anyKill ? 2 : 1), movedPiece[1]);                
+            } else if(action.equals("r")) {
+                newField = this.getFieldInPos(movedPiece[0], movedPiece[1] + (anyKill ? 2 : 1));
             } else {
-                System.out.println("Jogada Invalida");
+                newField = this.getFieldInPos(movedPiece[0], movedPiece[1] + (anyKill ? -2 : -1));
+            }           
+            
+            newField.setLayout(null);
+            newField.add(new Piece(player == this.id ? this.playerCol : this.otherCol));
+            oldField.removeAll();
+            if(killField != null) {
+                killField.removeAll();
             }
-        } else {
-            System.out.println("Jogada Invalida");
+            this.selected = null;
+            this.gameBoard.updateUI();
         }
     }
-
-    public void movePiece(String move, Piece movedPiece, Piece killedPiece) {
-        if(killedPiece != null) {
-            if(move == "u") movedPiece.incrementI(-2);
-            else if(move == "d") movedPiece.incrementI(2);
-            else if(move == "l") movedPiece.incrementJ(-2);
-            else if(move == "r") movedPiece.incrementJ(2);
-        } else {
-            if(move == "u") movedPiece.incrementI(-1);
-            else if(move == "d") movedPiece.incrementI(1);
-            else if(move == "l") movedPiece.incrementJ(-1);
-            else if(move == "r") movedPiece.incrementJ(1);
-        }
-        this.board.updateBoard(movedPiece, killedPiece);
-    }
-
-    public static void main(String[] args) {
-        new YoteGame(1000, 550);
-    }
-
+    
     public void keyPressed(KeyEvent e) {
         int keyCode = e.getKeyCode();
-//        System.out.println("Selected : " + selected);
-        if(this.selected != null) {
-            int i = this.selected.getPosition()[0];
-            int j = this.selected.getPosition()[1];
+        if(this.selected != null && this.isMyTurn) {
             if(keyCode == 37) {
-                Piece nearPiece = j > 0 ? this.board.getPieceOnBoard(i, j-1) : null;
-                Piece farPiece  = j > 1 ? this.board.getPieceOnBoard(i, j-2) : null;
-                testAndMovePiece(nearPiece, farPiece, j, "l");
+                this.client.sendMovement("l", this.selected);
             } else if(keyCode == 39) {
-                Piece nearPiece = j < 5 ? this.board.getPieceOnBoard(i, j+1) : null;
-                Piece farPiece  = j < 4 ? this.board.getPieceOnBoard(i, j+2) : null;
-                testAndMovePiece(nearPiece, farPiece, j, "r");
+                this.client.sendMovement("r", this.selected);
             }else if(keyCode == 38) {
-                Piece nearPiece = i > 0 ? this.board.getPieceOnBoard(i-1, j) : null;
-                Piece farPiece  = i > 1 ? this.board.getPieceOnBoard(i-2, j) : null;
-                testAndMovePiece(nearPiece, farPiece, i, "u");
+                this.client.sendMovement("u", this.selected);
             } else if(keyCode == 40) {
-                Piece nearPiece = i < 4 ? this.board.getPieceOnBoard(i+1, j) : null;
-                Piece farPiece  = i < 3 ? this.board.getPieceOnBoard(i+2, j) : null;
-                testAndMovePiece(nearPiece, farPiece, i, "d");
+                this.client.sendMovement("d", this.selected);
             }
         }
     }
 
     public void mousePressed(MouseEvent e) {
-        JPanel clickedPanel = ((JPanel)e.getSource());
-        String strPos = clickedPanel.getName();
-        int[] pos = {new Integer(strPos.substring(0, 1)), new Integer(strPos.substring(1))};
-        System.out.println("i = " + pos[0] + " and j = " + pos[1]);
-
-        if(this.p1.existAnyAvailablePiece() && this.board.boardPositionIsEmpty(pos[0], pos[1])) {
-            Piece addPiece = this.p1.getOneAvailablePiece();
-            addPiece.updatePosition(pos[0], pos[1]);
-            this.p1.updatePiecesVectors(addPiece);
-            this.board.insertPieceOnBoard(addPiece);
-
+        if(this.isMyTurn) {
+            JPanel clickedField = ((JPanel)e.getSource());
+            String strPos = clickedField.getName();
+            int[] pos = {new Integer(strPos.substring(0, 1)), new Integer(strPos.substring(1))};
+            
+            if(selected == null && clickedField.getComponentCount() == 0) {
+                this.client.sendMovement("i", pos);
+            } else if(selected == null) {
+                Piece selectedPiece = (Piece)clickedField.getComponent(0);
+                if(selectedPiece.getPlayerPiece() == this.id) {
+                    selectedPiece.updateColor(Color.BLUE);
+                    this.selected = new int[]{pos[0], pos[1]};
+                } else {
+                    //System.out.println("JOGADA INVALIDA");
+                }
+            } else if(pos[0] == this.selected[0] && pos[1] == this.selected[1]) {
+                Piece selectedPiece = (Piece)clickedField.getComponent(0);
+                if(selectedPiece.getPlayerPiece() == this.id) {
+                    selectedPiece.returnPreviousColor();
+                    this.selected = null;
+                } else {
+                    //System.out.println("JOGADA INVALIDA SELECT");
+                }
+            } else {
+                //System.out.println("JOGADA INVALIDA UNKNOWN");
+            }
         }
     }
 
@@ -138,104 +161,32 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
     public void mouseExited(MouseEvent e) {}
     public void mouseClicked(MouseEvent e) {}
     public void mouseReleased(MouseEvent e) {}
-}
-
-class Board {
-    private Piece[][] boardMatrix = new Piece[5][6];
-//    private JPanel[][] graphicMatrix = new JPanel[5][6];
-
-    public Board() {
-        for(int i=0; i < 5; i++) {
-            for(int j=0; j < 6; j++) {
-                boardMatrix[i] = null;
-            }
-        }
-    }
-
-    public void updateBoard(Piece movedPiece, Piece killedPiece) {
-        int[] oldMovedPos = this.getPieceBoardPosition(movedPiece);
-        int[] newMovedPos = movedPiece.getPosition();
-
-        if(oldMovedPos!= null && oldMovedPos[0] != newMovedPos[0] || oldMovedPos[1] != newMovedPos[1]) {
-            this.boardMatrix[newMovedPos[0]][newMovedPos[1]] =  movedPiece;
-        }
-
-        if(killedPiece != null) {
-            int[] killedPos = killedPiece.getPosition();
-            this.boardMatrix[killedPos[0]][killedPos[1]] = null;
-        }
-    }
-
-    public void insertPieceOnBoard(Piece piece) {
-        int[] pos = piece.getPosition();
-        this.boardMatrix[pos[0]][pos[1]] = piece;
-    }
-
-    public Piece getPieceOnBoard(int i, int j) {
-        return this.boardMatrix[i][j];
-    }
-
-    public boolean boardPositionIsEmpty(int i, int j) {
-        return this.getPieceOnBoard(i, j) == null ? true : false;
-    }
-
-    public int[] getPieceBoardPosition(Piece piece) {
-        for(int i=0; i<5; i++) {
-            for(int j=0; j<6; j++) {
-                Piece auxPiece = this.boardMatrix[i][j];
-                if(piece == auxPiece) return new int[]{i, j};
-            }
-        }
-        return null;
-    }
+    
+    public static void main(String[] args) {
+        new YoteGame(1000, 550, args);
+    }    
 }
 
 class Piece extends JPanel {
     private static final long serialVersionUID = 1L;
-    private int i;
-    private int j;
-    private Color color;
+    private Color realCol;
 
     public Piece(Color color) {
-        this(-1,-1, color);
-    }
-
-    public Piece(int i, int j, Color color) {
-        this.i = i;
-        this.j = j;
-        this.color = color;
+        this.realCol = color;
         this.setBackground(color);
-        this.setSize(40, 40);
-        this.setVisible(false);
-//      this.setOpaque(true);
+        this.setBounds(30, 32, 40, 40);
+        this.setVisible(true);
+    }
+    
+    public int getPlayerPiece() {
+        return this.realCol == Color.BLACK ? 0 : 1;
     }
 
-    public Color getColor() {
-        return this.color;
+    public void returnPreviousColor() {
+        this.setBackground(this.realCol);
     }
-
-    public int[] getPosition() {
-        return new int[]{this.i, this.j};
-    }
-
-    public void updateI(int i) {
-        this.i = i;
-    }
-
-    public void updateJ(int j) {
-        this.j = j;
-    }
-
-    public void incrementI(int i) {
-        this.i += i;
-    }
-
-    public void incrementJ(int j) {
-        this.j += j;
-    }
-
-    public void updatePosition(int i, int j) {
-        this.i = i;
-        this.j = j;
+    
+    public void updateColor(Color newColor) {
+        this.setBackground(newColor);
     }
 }
