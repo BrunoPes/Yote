@@ -1,5 +1,6 @@
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -8,12 +9,17 @@ class Server {
     static int port = 9090;
     private ServerSocket serverSocket = null;
     private ArrayList<DataOutputStream> outputs = new ArrayList<DataOutputStream>();
+    private ArrayList<ServerClientListener> clientListeners = new ArrayList<ServerClientListener>(); 
     private ServerBoard board = new ServerBoard();
     private int playerOfTurn = -1;
     private int[] playerPieces = {12,12};
     private boolean canMove = true;
 
     public Server() {
+    	this.waitClients();
+    }
+    
+    public void waitClients(){
         try {
             serverSocket = new ServerSocket(port);
             for(int i=0; i<2; i++) {
@@ -29,6 +35,21 @@ class Server {
         }
     }
 
+    public void resetGameState() {
+    	this.playerOfTurn = -1;
+        this.playerPieces = new int[]{12,12};
+        this.canMove = true;
+        this.board.resetBoard();
+    }
+    
+    public void resetClientSockets() {
+    	for(ServerClientListener client : this.clientListeners) {
+    		client.closeClient();
+    	}
+    	this.clientListeners.clear();
+    	this.waitClients();
+    }
+    
     public int getPlayerOfTurn() {
         return playerOfTurn;
     }
@@ -39,22 +60,11 @@ class Server {
             DataInputStream input = new DataInputStream(newSocket.getInputStream());
             DataOutputStream output = new DataOutputStream(newSocket.getOutputStream());
             ServerClientListener client = new ServerClientListener(newSocket, input, output, id, this);
-            client.start();
             this.outputs.add(output);
+            this.clientListeners.add(client);
+            client.start();
         } catch(Exception e) {
             System.out.println(e);
-        }
-    }
-
-    public void broadcastReceivedMessageResponse(int clientId) {
-        for(DataOutputStream output : this.outputs) {
-            try{
-                output.writeUTF("REMOTE SERVER REPLY: O jogador id = " + clientId + " enviou uma msg!");
-                output.flush();
-            } catch (Exception e) {
-                System.out.println(e);
-            }
-
         }
     }
 
@@ -64,10 +74,17 @@ class Server {
         if(action.equals("i")){
             this.testAndInsertPiece(player, jsonHelper.getMovedPos());
         } else if(action.equals("k")) {
-            this.sendRemovePiece(player, jsonHelper.getMovedPos());
+        	System.out.println("REMOVING");
+            this.sendRemovePiece(player, jsonHelper.getMovedPos(), jsonHelper.getKilledPos());
+        } else if(action.equals("t")) {
+            this.sendNextTurn(player);
+        } else if(action.equals("g")) {
+        	this.sendFinishGame(player);
+        } else if(action.equals("fg")) {
+        	this.resetClientSockets();
         } else {
             this.testAndMovePiece(jsonHelper.getAction(), jsonHelper.getMovedPos(), player);
-        }
+        } 
     }
 
     public void testAndInsertPiece(int player, int[] pos) {
@@ -142,6 +159,11 @@ class Server {
         }
     }
 
+    public void sendFinishGame(int player) {
+    	this.resetGameState();
+    	this.sendGameUpdate(player, "g", null, null);
+    }
+    
     public void sendNextTurn(int nowPlayer) {
         this.canMove = true;
         this.playerOfTurn = nowPlayer == 0 ? 1 : 0;
@@ -153,14 +175,22 @@ class Server {
         this.sendGameUpdate(this.playerOfTurn, "k", null, null);
     }
 
-
-    public void sendRemovePiece(int player, int[] pos) {
-        int enemy = this.board.getPiece(pos[0], pos[1]);
-        if(enemy != 0 && player != (enemy-1)) {
-//          System.out.println("REMOVED PIECE");
-            this.board.removePiece(pos[0], pos[1]);
-            this.sendGameUpdate(player, "e", pos, null);
-            this.sendNextTurn(player);
+    public void sendRemovePiece(int player, int[] pos, int[] remPos) {
+    	System.out.println("Pos: "+pos[0]+""+pos[1]+ "Removed: " + remPos[0]+""+remPos[1]);
+        int enemy = this.board.getPiece(remPos[0], remPos[1]);
+        if(enemy != 0 && player != (enemy-1)) {        	
+            this.board.removePiece(remPos[0], remPos[1]);
+            this.sendGameUpdate(player, "e", remPos, null);
+            if(pos != null && this.board.getInboardEnemyPieces(player) > 0) {
+            	System.out.println("CAN KILL ? " + this.board.canKillAnother(player, pos[0], pos[1]));
+            	if(this.board.canKillAnother(player, pos[0], pos[1])) {
+            		this.sendGameUpdate(player, "m", null, null);
+            	} else {
+            		this.sendNextTurn(player);
+            	}
+            } else {
+            	this.sendNextTurn(player);
+            }
         } else {
             System.out.println("Jogada Invalida");
         }
@@ -198,14 +228,17 @@ class Server {
 class ServerClientListener extends Thread {
     private int player;
     private Server server;
+    private Socket socket;
     private DataInputStream input;
     private DataOutputStream output;
 
-    public ServerClientListener(Socket socket, DataInputStream input, DataOutputStream output, int playerNum, Server server) {
+    public ServerClientListener(Socket socket, DataInputStream input, DataOutputStream output, int playerNum, Server server) {    	
         this.player = playerNum;
         this.server = server;
+        this.socket = socket;
         this.input = input;
         this.output = output;
+        
         try{
             this.output.writeUTF("p:"+player+",a:c");
         } catch (Exception e) {
@@ -215,19 +248,37 @@ class ServerClientListener extends Thread {
 
     public void run() {
         try {
-            while(true) {
+            while(this.socket != null && this.input != null && this.socket.isConnected()) {
                 String msg = this.input.readUTF();
                 System.out.println("MSG: " + msg + "\nINDEX S: " + msg.indexOf("s:"));
-
-                if(this.server.getPlayerOfTurn() == this.player && msg.indexOf("s:") < 0) {
+                
+                if(msg.indexOf("s:") >= 0) {
+                	this.server.sendChatUpdate(msg);
+                } else if((this.server.getPlayerOfTurn() == this.player && msg.indexOf("s:") < 0) || msg.indexOf("t:c") >= 0) {
                     this.server.receivedMessage(this.player, msg);
-                } else if(msg.indexOf("s:") >= 0) {
-                    this.server.sendChatUpdate(msg);
                 }
             }
         } catch(Exception e) {
-            System.out.println(e);
+            e.printStackTrace();
         }
+    }
+    
+    public void closeClient() {
+		try {
+			if(this.socket.isConnected()) {
+				//if(this.input != null) this.input.close();
+				//if(this.output != null) this.output.close();
+				this.socket.shutdownInput();
+				this.socket.shutdownOutput();
+				this.socket.close();
+			}
+			
+			this.input = null;
+			this.output = null;
+			this.socket = null;
+		} catch(IOException e) {
+			e.printStackTrace();
+		}
     }
 }
 
@@ -237,7 +288,15 @@ class ServerBoard {
     public ServerBoard() {
         for(int i=0; i < 5; i++) {
             for(int j=0; j < 6; j++) {
-                boardMatrix[i][j] = 0;
+                this.boardMatrix[i][j] = 0;
+            }
+        }
+    }
+    
+    public void resetBoard() {
+    	for(int i=0; i < 5; i++) {
+            for(int j=0; j < 6; j++) {
+                this.boardMatrix[i][j] = 0;
             }
         }
     }
@@ -246,7 +305,7 @@ class ServerBoard {
         System.out.println("Matriz: ");
         for(int i=0; i < 5; i++) {
             for(int j=0; j < 6; j++) {
-                System.out.print(boardMatrix[i][j] + " ");
+                System.out.print(this.boardMatrix[i][j] + " ");
             }
             System.out.println("");
         }
@@ -286,7 +345,7 @@ class ServerBoard {
     }
 
     public boolean canKillAnother(int player, int i, int j) {
-        int enemy = player == 0 ? 1 : 0;
+        int enemy = player == 0 ? 1+1 : 0+1;
         boolean u =  i > 1 && this.getPiece(i-1, j) == enemy && this.posIsEmpty(i-2, j) ? true : false;
         boolean d =  i < 3 && this.getPiece(i+1, j) == enemy && this.posIsEmpty(i+2, j) ? true : false;
         boolean l =  j > 1 && this.getPiece(i, j-1) == enemy && this.posIsEmpty(i, j-2) ? true : false;

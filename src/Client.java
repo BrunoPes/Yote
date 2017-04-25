@@ -1,84 +1,65 @@
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.ConnectException;
 import java.net.Socket;
 
-class ClientThreadReader extends Thread {
-	private DataInputStream input = null;
-	private Socket socket = null;
-	private String readMsg = "";
-	private Client client;
-
-	public ClientThreadReader(Socket socket, Client client) {
-		this.socket = socket;
-		this.client = client;
-
-		try {
-			this.input = new DataInputStream(this.socket.getInputStream());
-			this.start();
-		} catch(Exception e) {
-			System.out.println(e);
-		}
-	}
-
-	public void run() {
-		while (true) {
-			try {
-				this.readMsg = this.input.readUTF();
-				System.out.println(this.readMsg);
-				if(readMsg.indexOf("s:") >= 0) {
-					this.client.chatUpdateMessage(this.readMsg);
-				} else {
-					this.client.receivedMovement(this.readMsg);
-				}
-			} catch(Exception e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	public String getLastRcvdMessage() {
-		return this.readMsg;
-	}
-}
+import javax.swing.JOptionPane;
 
 class Client {
-	static String host = "";
-	static int port = 9090;
+	private int port;
+	private String host;	
 	private Socket socket = null;
 	private DataOutputStream output = null;
-	private String sendMsg = "";
+	private DataInputStream input = null;
 	private YoteGame clientGame;
 
-	public Client(String[] args, YoteGame game) {
-		this.initSocket(args);
+	public Client(YoteGame game) {
 		this.clientGame = game;
 	}
 
-	public void initSocket(String[] args) {
-		host = args.length == 0 ? "localhost" : args[0];
+	public void initSocket(String host, int port) {
+		this.port = port;
+		this.host = host.length() == 0 ? "localhost" : host;
 		try{
-			this.socket = new Socket(host, port);
+			this.socket = new Socket(this.host, this.port);
+			this.input = new DataInputStream(this.socket.getInputStream());
 			System.out.println("Conectado....");
-			new ClientThreadReader(this.socket, this);
+			new ClientServerListener(this.input, this);
 			this.output = new DataOutputStream(this.socket.getOutputStream());
+			this.clientGame.requestFocus();
+		} catch(ConnectException e) {
+			String errorMsg = "Verifique se o servidor está online e se o IP inserido está correto";
+			new JOptionPane(errorMsg, JOptionPane.ERROR_MESSAGE);
+			JOptionPane.showMessageDialog(this.clientGame, errorMsg, "Não foi possível conectar-se ao Servidor", JOptionPane.ERROR_MESSAGE);
+			System.out.println("Connection refused?");
+			e.printStackTrace();
 		} catch(Exception e) {
-			System.out.println(e);
+			e.printStackTrace();
 		}
 	}
-
-	public String getLastSentMessage() {
-		return this.sendMsg;
-	}
-
-	public void sendChatMsg(String msg) {
+	
+	public void closeSocketClient() {
 		try {
-			this.output.writeUTF("s:"+msg);
-		} catch(Exception e){
-			System.out.println(e);
+			this.sendControlMsg("fg", null);
+			if(this.socket.isConnected()) {
+				this.socket.shutdownInput();
+				this.socket.shutdownOutput();
+				this.socket.close();
+			}
+			this.input = null;
+			this.output = null;
+			this.socket = null;
+		} catch(IOException e) {
+			e.printStackTrace();
 		}
 	}
 
-	public void chatUpdateMessage(String msg) {
+	public Socket getSocket() {
+		return this.socket;
+	}
+
+	public void chatMessageUpdate(String msg) {
 		String chatMsg = (new MessageHelper(msg)).getChatMessage();
 		if(chatMsg != null) this.clientGame.updateChat(chatMsg);
 	}
@@ -92,12 +73,70 @@ class Client {
 
 		this.clientGame.updateGame(player, move, movedPos, killedPos);
 	}
-
-	public void sendMovement(String move, int[] movedPiece) {
+	
+	public void sendControlMsg(String action, String msg) {
 		try {
-			this.output.writeUTF("a:"+move+",m:"+movedPiece[0]+""+movedPiece[1]);
+			msg = msg != null ? msg : "";
+			this.output.writeUTF("a:"+action+",t:c,"+msg);
 		} catch(Exception e){
-			System.out.println(e);
+			e.printStackTrace();
 		}
+	}
+	
+	public void sendChatMsg(String msg) {
+		try {
+			this.output.writeUTF("s:"+msg);
+		} catch(Exception e){
+			e.printStackTrace();
+		}
+	}
+
+	public void sendMovement(String move, int[] movedPiece, int[] lastMoved) {
+		try {
+			String last = lastMoved != null ? ",k:"+lastMoved[0]+""+lastMoved[1] : "";
+			String moved = movedPiece != null ? ",m:"+movedPiece[0]+""+movedPiece[1] : "";
+			this.output.writeUTF("a:"+move+moved+last);
+		} catch(Exception e){
+			e.printStackTrace();
+		}
+	}
+}
+
+class ClientServerListener extends Thread {
+	private DataInputStream input = null;
+	private String readMsg = "";
+	private Client client;
+
+	public ClientServerListener(DataInputStream input, Client client) {
+		this.input = input;
+		this.client = client;
+		
+		try {
+			this.start();
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void run() {
+		Socket sock = this.client.getSocket();
+		try {
+			while(sock != null && this.input != null && sock.isConnected() && !sock.isClosed()) {
+				if(!sock.isClosed()) {
+					this.readMsg = this.input.readUTF();
+					if(readMsg.indexOf("s:") >= 0) {
+						this.client.chatMessageUpdate(this.readMsg);
+					} else {
+						this.client.receivedMovement(this.readMsg);
+					}
+				}
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public String getLastRcvdMessage() {
+		return this.readMsg;
 	}
 }
