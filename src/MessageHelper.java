@@ -6,15 +6,30 @@ public class MessageHelper {
 	}
 
 	public int getPlayer() {
-		int start = this.json.indexOf("p:")+2;
-		String player = this.json.substring(start, start+1);
-		return new Integer(player).intValue();
+		if(this.json.indexOf("p:") >= 0) {
+			int start = this.json.indexOf("p:")+2;
+			String player = this.json.substring(start, start+1);
+			return new Integer(player).intValue();
+		}
+		return -1;
 	}
 
 	public String getAction() {
-		int start = this.json.indexOf("a:")+2;
-		String move = this.json.substring(start, start+1);
-		return move;
+		if(this.json.indexOf("a:") >= 0) {
+			int start = this.json.indexOf("a:")+2;
+			String move = this.json.substring(start, start+1);
+			return move;
+		}
+		return null;
+	}
+
+	public String getActionTwoChar() {
+		if(this.json.indexOf("a:rg") >= 0) {
+			int start = this.json.indexOf("a:rg")+2;
+			String move = this.json.substring(start, start+2);
+			return move;
+		}
+		return null;
 	}
 
 	public String getChatMessage() {

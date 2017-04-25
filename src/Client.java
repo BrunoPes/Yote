@@ -8,7 +8,7 @@ import javax.swing.JOptionPane;
 
 class Client {
 	private int port;
-	private String host;	
+	private String host;
 	private Socket socket = null;
 	private DataOutputStream output = null;
 	private DataInputStream input = null;
@@ -38,14 +38,16 @@ class Client {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public void closeSocketClient() {
+		this.sendCloseMsg();
+		//long now = System.currentTimeMillis();
+		//while(System.currentTimeMillis() - now < 1000);
 		try {
-			this.sendControlMsg("fg", null);
-			if(this.socket.isConnected()) {
-				this.socket.shutdownInput();
-				this.socket.shutdownOutput();
-				this.socket.close();
+			if(this.socket != null && this.socket.isConnected() && !this.socket.isClosed()) {
+				this.input.close();
+				this.output.close(); // ???
+				this.socket.close(); // ???
 			}
 			this.input = null;
 			this.output = null;
@@ -53,6 +55,7 @@ class Client {
 		} catch(IOException e) {
 			e.printStackTrace();
 		}
+		this.clientGame.updateButtons(true);
 	}
 
 	public Socket getSocket() {
@@ -66,14 +69,23 @@ class Client {
 
 	public void receivedMovement(String json) {
 		MessageHelper jsonObj = new MessageHelper(json);
+
+		String move = json.indexOf("a:rg") >= 0 ? jsonObj.getActionTwoChar() : jsonObj.getAction();
 		int player = jsonObj.getPlayer();
-		String move = jsonObj.getAction();
 		int[] movedPos = jsonObj.getMovedPos();
 		int[] killedPos = jsonObj.getKilledPos();
 
 		this.clientGame.updateGame(player, move, movedPos, killedPos);
 	}
-	
+
+	public void sendCloseMsg() {
+		try {
+			this.output.writeUTF(".close.");
+		} catch(Exception e){
+			e.printStackTrace();
+		}
+	}
+
 	public void sendControlMsg(String action, String msg) {
 		try {
 			msg = msg != null ? msg : "";
@@ -82,7 +94,7 @@ class Client {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public void sendChatMsg(String msg) {
 		try {
 			this.output.writeUTF("s:"+msg);
@@ -110,7 +122,7 @@ class ClientServerListener extends Thread {
 	public ClientServerListener(DataInputStream input, Client client) {
 		this.input = input;
 		this.client = client;
-		
+
 		try {
 			this.start();
 		} catch(Exception e) {
@@ -134,9 +146,5 @@ class ClientServerListener extends Thread {
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
-	}
-
-	public String getLastRcvdMessage() {
-		return this.readMsg;
 	}
 }
