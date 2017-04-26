@@ -30,7 +30,7 @@ class Client {
 			this.clientGame.requestFocus();
 		} catch(ConnectException e) {
 			String errorMsg = "Verifique se o servidor está online e se o IP inserido está correto";
-			new JOptionPane(errorMsg, JOptionPane.ERROR_MESSAGE);
+			//new JOptionPane(errorMsg, JOptionPane.ERROR_MESSAGE);
 			JOptionPane.showMessageDialog(this.clientGame, errorMsg, "Não foi possível conectar-se ao Servidor", JOptionPane.ERROR_MESSAGE);
 			System.out.println("Connection refused?");
 			e.printStackTrace();
@@ -41,13 +41,13 @@ class Client {
 
 	public void closeSocketClient() {
 		this.sendCloseMsg();
-		//long now = System.currentTimeMillis();
-		//while(System.currentTimeMillis() - now < 1000);
+		long now = System.currentTimeMillis();
+		while(System.currentTimeMillis() - now < 1000);
 		try {
 			if(this.socket != null && this.socket.isConnected() && !this.socket.isClosed()) {
 				this.input.close();
-				this.output.close(); // ???
-				this.socket.close(); // ???
+				this.output.close();
+				this.socket.close();
 			}
 			this.input = null;
 			this.output = null;
@@ -55,6 +55,7 @@ class Client {
 		} catch(IOException e) {
 			e.printStackTrace();
 		}
+		
 		this.clientGame.updateButtons(true);
 	}
 
@@ -69,8 +70,9 @@ class Client {
 
 	public void receivedMovement(String json) {
 		MessageHelper jsonObj = new MessageHelper(json);
-
-		String move = json.indexOf("a:rg") >= 0 ? jsonObj.getActionTwoChar() : jsonObj.getAction();
+		String substr = json.indexOf("a:rg") >= 0 ? "rg" : (json.indexOf("a:wr") >= 0 ? "wr" : null);
+		
+		String move = substr != null ? substr : jsonObj.getAction();
 		int player = jsonObj.getPlayer();
 		int[] movedPos = jsonObj.getMovedPos();
 		int[] killedPos = jsonObj.getKilledPos();

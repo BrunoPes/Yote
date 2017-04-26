@@ -36,6 +36,7 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
     private int countMsgs = 0;
     private int[] playersQnt = new int[]{12, 12};
     private boolean isMyTurn = false;
+    private boolean canRestart = false;
     private boolean shouldKill = false;
     private boolean shouldContinue = false;
     private JButton connect;
@@ -86,15 +87,17 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
         this.restart = new JButton("Reiniciar");
         this.connect.addMouseListener(this);
         this.connect.setBounds(0, 0, 98, 20);
-        this.forfeit.addMouseListener(this);
-        this.forfeit.setBounds(100, 0, 98, 20);
         this.restart.addMouseListener(this);
-        this.restart.setBounds(200, 0, 98, 20);
+        this.restart.setBounds(100, 0, 98, 20);
+        this.restart.setEnabled(false);
+        this.forfeit.addMouseListener(this);
+        this.forfeit.setBounds(200, 0, 98, 20);
+        this.forfeit.setEnabled(false);
         JPanel buttons = new JPanel(null);
         buttons.setSize(new Dimension(300, 30));
         buttons.add(this.connect);
-        buttons.add(this.forfeit);
         buttons.add(this.restart);
+        buttons.add(this.forfeit);
         JPanel buttonsPanel = new JPanel();
         buttonsPanel.setLayout(new BoxLayout(buttonsPanel, BoxLayout.Y_AXIS));
         buttonsPanel.setMaximumSize(new Dimension(292, 70));
@@ -179,7 +182,15 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
         return null;
     }
 
-    public void resetUI() {
+    public void resetStateAndUI() {
+        this.countMsgs = 0;
+        this.isMyTurn = false;
+        this.shouldKill = false;
+        this.canRestart = false;
+        this.shouldContinue = false;
+        this.selected = null;
+        this.playersQnt = new int[]{12,12};
+
         this.chat.setText("");
         this.input.setText("");
         for(Component comp : this.gameBoard.getComponents()) {
@@ -188,25 +199,28 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
             }
         }
         this.gameBoard.updateUI();
+        this.updateLabels(true);
     }
 
     public void updateLabels(boolean start) {
         if(start) {
             this.turnLabel.setText("Turno: " + (this.id == 0 ? "Você" : "Oponente"));
-            this.helpLabel.setText(this.id == 0 ? "Sua vez: insira ou movimente alguma peça" : "Aguarde a sua vez...");
+            this.helpLabel.setText(this.id == 0 ? "Insira ou movimente alguma peça" : "Aguarde a sua vez...");
             this.player1Label.setText("Player 1: Pretas " + (this.id == 0 ? "(Você)" : "(Oponente)"));
             this.player1Num.setText("Peças para inserir: " + playersQnt[0]);
             this.player2Label.setText("Player 2: Brancas " + (this.id == 1 ? "(Você)" : "(Oponente)"));
             this.player2Num.setText("Peças para inserir: " + playersQnt[1]);
         } else {
             this.turnLabel.setText("Turno: " + (this.isMyTurn  ? "Você" : "Oponente"));
-            this.helpLabel.setText(this.isMyTurn ? "Sua vez: insira ou movimente alguma peça" : "Aguarde a sua vez...");
+            this.helpLabel.setText(this.isMyTurn ? "Insira ou movimente alguma peça" : "Aguarde a sua vez...");
         }
         this.stateLabels.updateUI();
     }
 
     public void updateButtons(boolean connectEnabled) {
         this.hostInput.setEnabled(connectEnabled);
+        this.forfeit.setEnabled(!connectEnabled);
+        this.restart.setEnabled(!connectEnabled);
         this.connect.setEnabled(connectEnabled);
         this.connect.setText(connectEnabled ? "Conectar" : "Conectado");
         this.connect.updateUI();
@@ -223,7 +237,6 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
     public void updateGame(int player, String action, int[] movedPiece, int[] killedPiece) {
         if(action.equals("c")) {
             this.id = player;
-            this.playersQnt = new int[]{12,12};
             this.playerCol = this.id == 0 ? Color.BLACK : Color.WHITE;
             this.otherCol = this.id == 0 ? Color.WHITE : Color.BLACK;
             this.updateButtons(false);
@@ -275,16 +288,13 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
             this.helpLabel.setText("Remova uma peça do oponente");
             this.helpLabel.updateUI();
         } else if(action.equals("e")) {
-            System.out.println("ELIMINANDO");
             if(this.id == player) this.shouldKill = false;
             JPanel removedPieceField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
             removedPieceField.removeAll();
             this.gameBoard.updateUI();
         } else if(action.equals("m") && this.id == player) {
-            System.out.println("Multiples");
             Component moved= this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
             if(moved != null && moved instanceof Piece) {
-                System.out.println("Ok!!! Mult!!");
                 this.shouldKill = false;
                 this.shouldContinue = true;
                 ((Piece)moved).updateColor(Color.BLUE);
@@ -294,27 +304,33 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
                 this.client.sendMovement("t", null, null);
             }
         } else if(action.equals("g")) {
-            this.finishGame(-1, player);
+            this.finishGame(-1, player, true);
         } else if(action.equals("rg")) {
             int winner = this.id == player ? (1-this.id) : this.id;
-            this.finishGame(winner, -1);
+            this.finishGame(winner, -1, true);
+        } else if(action.equals("w")) {
+            this.finishGame(player, -1, false);
+            this.canRestart = true;
+        } else if(action.equals("wr")) {
+            this.resetStateAndUI();
+            this.isMyTurn = (player == this.id) ? true : false;
+            this.updateLabels(false);
         }
     }
 
-    public void finishGame(int winPlayer, int giveUpPlayer) {
-        this.countMsgs = 0;
-        this.isMyTurn = false;
-        this.shouldKill = false;
-        this.shouldContinue = false;
-        this.selected = null;
-        this.resetUI();
+    public void finishGame(int winPlayer, int giveUpPlayer, boolean shouldResetUI) {
+        if(shouldResetUI) this.resetStateAndUI();
+        
         String msg;
         if(giveUpPlayer >= 0) {
             msg = this.id == giveUpPlayer ? "Você perdeu por desistência" : "Parabéns, você venceu! Seu oponente desistiu!";
             this.client.closeSocketClient();
-        } else {
+        } else if(winPlayer < 2) {
             msg = this.id == winPlayer ? "Parabéns, você venceu!" : "Você perdeu :(";
+        } else {
+            msg = "Empate! Nesse jogo não haverá vencedores.";
         }
+        
         JOptionPane.showMessageDialog(this, msg, "Fim de Jogo", JOptionPane.INFORMATION_MESSAGE);
         this.requestFocus();
     }
@@ -358,7 +374,7 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
                     this.client.sendControlMsg("g", null);
                     break;
                 case "Reiniciar":
-                    this.client.sendControlMsg("rg,", null);
+                    this.client.sendControlMsg(canRestart ? "wr" : "rg", null);
                     break;
                 default: break;
             }
@@ -368,9 +384,9 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
             int[] pos = {new Integer(strPos.substring(0, 1)), new Integer(strPos.substring(1))};
 
             if(!this.shouldKill && !this.shouldContinue) {
-                if(selected == null && clickedField.getComponentCount() == 0) {
+                if(this.selected == null && clickedField.getComponentCount() == 0) {
                     this.client.sendMovement("i", pos, null);
-                } else if(selected == null) {
+                } else if(this.selected == null) {
                     Piece selectedPiece = (Piece)clickedField.getComponent(0);
                     if(selectedPiece.getPlayerPiece() == this.id) {
                         selectedPiece.updateColor(Color.BLUE);
@@ -378,17 +394,23 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
                     } else {
                         //System.out.println("JOGADA INVALIDA");
                     }
-                } else if(pos[0] == this.selected[0] && pos[1] == this.selected[1]) {
+                } else if(this.selected != null) {
                     Piece selectedPiece = (Piece)clickedField.getComponent(0);
-                    if(selectedPiece.getPlayerPiece() == this.id) {
-                        selectedPiece.returnPreviousColor();
-                        this.selected = null;
-                    } else {
-                        //System.out.println("JOGADA INVALIDA SELECT");
+                    if(pos[0] == this.selected[0] && pos[1] == this.selected[1]) {
+                        if(selectedPiece.getPlayerPiece() == this.id) {
+                            selectedPiece.returnPreviousColor();
+                            this.selected = null;
+                        } else {
+                            //System.out.println("JOGADA INVALIDA SELECT");
+                        }
+                    } else if(selectedPiece.getPlayerPiece() == this.id) {
+                        Piece previous = (Piece)this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
+                        previous.returnPreviousColor();
+                        this.selected = new int[]{pos[0], pos[1]};
+                        selectedPiece.updateColor(Color.BLUE);
                     }
                 }
             } else if(this.shouldKill) {
-                //System.out.println("Selected piece = " + selected);
                 if(clickedField.getComponentCount() > 0) {
                     Piece selectedPiece = (Piece)clickedField.getComponent(0);
                     if(selectedPiece.getPlayerPiece() != this.id) {

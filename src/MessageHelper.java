@@ -23,9 +23,9 @@ public class MessageHelper {
 		return null;
 	}
 
-	public String getActionTwoChar() {
-		if(this.json.indexOf("a:rg") >= 0) {
-			int start = this.json.indexOf("a:rg")+2;
+	public String getActionTwoChar(String substr) {
+		if(this.json.indexOf(substr) >= 0) {
+			int start = this.json.indexOf(substr)+2;
 			String move = this.json.substring(start, start+2);
 			return move;
 		}

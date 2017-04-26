@@ -94,7 +94,6 @@ class Server {
         if(action.equals("i")){
             this.testAndInsertPiece(player, jsonHelper.getMovedPos());
         } else if(action.equals("k")) {
-            System.out.println("REMOVING");
             this.sendRemovePiece(player, jsonHelper.getMovedPos(), jsonHelper.getKilledPos());
         } else if(action.equals("t")) {
             this.sendNextTurn(player);
@@ -104,7 +103,11 @@ class Server {
             System.out.println("Reset");
             this.sendFinishGame(player, "rg");
             this.sendNextTurn(player);
-            //this.resetClientSockets();
+        } else if(json.indexOf("a:wr,") >= 0) {
+        	System.out.println("Restartando ok");
+        	this.board.printBoard();
+        	this.playerOfTurn = player;
+        	this.sendGameUpdate(this.playerOfTurn, "wr", null, null);
         } else {
             this.testAndMovePiece(jsonHelper.getAction(), jsonHelper.getMovedPos(), player);
         }
@@ -114,8 +117,14 @@ class Server {
         if(this.playerPieces[player] > 0 && this.board.posIsEmpty(pos[0], pos[1])) {
             this.playerPieces[player]--;
             this.board.insertPieceOnBoard(player+1, pos);
+            
+            int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
             this.sendGameUpdate(player, "i", pos, null);
-            this.sendNextTurn(player);
+            if(winState != -1) {
+            	this.sendFinishGame(winState, "w");
+            } else {
+            	this.sendNextTurn(player);
+            }
         } else {
             System.out.println("Jogada Invalida");
         }
@@ -123,62 +132,48 @@ class Server {
 
     public void testAndMovePiece(String move, int[] selected, int player) {
         int[] nearPiece = null;
-        int[] farPiece = null;
         int i = selected[0];
         int j = selected[1];
-        int axis = (move.equals("l") || move.equals("r")) ? j : i;
-        if(move.equals("l")) {
-            nearPiece = j > 0 ? new int[]{i, j-1} : null;
-            farPiece  = j > 1 ? new int[]{i, j-2} : null;
-        } else if(move.equals("r")) {
-            nearPiece = j < 5 ? new int[]{i, j+1} : null;
-            farPiece  = j < 4 ? new int[]{i, j+2} : null;
-        }else if(move.equals("u")) {
-            nearPiece = i > 0 ? new int[]{i-1, j} : null;
-            farPiece  = i > 1 ? new int[]{i-2, j} : null;
-        } else if(move.equals("d")) {
-            nearPiece = i < 4 ? new int[]{i+1, j} : null;
-            farPiece  = i < 3 ? new int[]{i+2, j} : null;
+
+        switch(move) {
+		    case "u": nearPiece = i > 0 ? new int[]{i-1, j} : null; break;
+		    case "d": nearPiece = i < 4 ? new int[]{i+1, j} : null; break;
+		    case "l": nearPiece = j > 0 ? new int[]{i, j-1} : null; break;
+			case "r": nearPiece = j < 5 ? new int[]{i, j+1} : null; break;
+		    default: break;
         }
-        if(nearPiece != null && !(this.board.posIsEmpty(nearPiece[0], nearPiece[1])) &&
-          ((axis>1 && (move.equals("u") || move.equals("l"))) || (axis<4 && move.equals("r")) || (axis<3 && move.equals("d")))) {
-            if(this.board.areDifferentPieces(selected, nearPiece) && this.board.posIsEmpty(farPiece[0], farPiece[1])) {
-                this.movePiece(move, selected, nearPiece, player);
-            } else {
-                System.out.println("Jogada Invalida COMER");
-            }
-        } else if((axis>0 && (move.equals("u") || move.equals("l"))) || (axis<5 && move.equals("r")) || (axis<4 && move.equals("d"))) {
-            if(this.board.posIsEmpty(nearPiece[0], nearPiece[1]) && this.canMove) {
-                this.movePiece(move, selected, null, player);
-            } else {
-                System.out.println("Jogada Invalida ANDAR");
-            }
+
+        if(this.board.canKillOnDirection(player, i, j, move)) {
+        	this.movePiece(move, selected, nearPiece, player);
+        } else if(this.board.canMoveOnDirection(i, j, move) && this.canMove) {
+        	this.movePiece(move, selected, null, player);
         } else {
-            System.out.println("Jogada Invalida UNKNOWN");
+        	System.out.println("Jogada Inválida");
         }
     }
 
     public void movePiece(String move, int[] movedPiece, int[] killedPiece, int player) {
         int[] oldPos = {movedPiece[0], movedPiece[1]};
-
-        if(killedPiece != null) {
-            if(move.equals("u")) movedPiece[0] += -2;
-            else if(move.equals("d")) movedPiece[0] += 2;
-            else if(move.equals("l")) movedPiece[1] += -2;
-            else if(move.equals("r")) movedPiece[1] += 2;
-        } else {
-            if(move.equals("u")) movedPiece[0] += -1;
-            else if(move.equals("d")) movedPiece[0] += 1;
-            else if(move.equals("l")) movedPiece[1] += -1;
-            else if(move.equals("r")) movedPiece[1] += 1;
+        
+        switch(move) {
+	        case "u": movedPiece[0] += killedPiece != null ? -2 : -1; break;
+		    case "d": movedPiece[0] += killedPiece != null ?  2 :  1; break;
+		    case "l": movedPiece[1] += killedPiece != null ? -2 : -1; break;
+			case "r": movedPiece[1] += killedPiece != null ?  2 :  1; break;
+		    default: break;
         }
-
+        
         this.board.updateBoard(oldPos, movedPiece, killedPiece);
         this.sendGameUpdate(player, move, oldPos, killedPiece);
-        if(killedPiece == null || this.board.getInboardEnemyPieces(player) == 0) {
-            this.sendNextTurn(player);
+        int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
+        if(winState != -1) {
+        	this.sendFinishGame(winState, "w");
         } else {
-            this.sendKillPiece(player);
+        	if(killedPiece == null || this.board.getInboardPlayerPieces(1-player) == 0) {
+                this.sendNextTurn(player);
+            } else {
+                this.sendKillPiece(player);
+            }
         }
     }
 
@@ -199,20 +194,17 @@ class Server {
     }
 
     public void sendRemovePiece(int player, int[] pos, int[] remPos) {
-        System.out.println("Pos: "+pos[0]+""+pos[1]+ "Removed: " + remPos[0]+""+remPos[1]);
         int enemy = this.board.getPiece(remPos[0], remPos[1]);
         if(enemy != 0 && player != (enemy-1)) {
             this.board.removePiece(remPos[0], remPos[1]);
             this.sendGameUpdate(player, "e", remPos, null);
-            if(pos != null && this.board.getInboardEnemyPieces(player) > 0) {
-                System.out.println("CAN KILL ? " + this.board.canKillAnother(player, pos[0], pos[1]));
-                if(this.board.canKillAnother(player, pos[0], pos[1])) {
-                    this.sendGameUpdate(player, "m", null, null);
-                } else {
-                    this.sendNextTurn(player);
-                }
+            
+            int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]); 
+            if(pos != null && this.board.getInboardPlayerPieces(1-player) > 0 && this.board.canKillOnDirection(player, pos[0], pos[1], null)) {
+            	this.sendGameUpdate(player, "m", null, null);
             } else {
-                this.sendNextTurn(player);
+            	if(winState != -1) this.sendFinishGame(winState, "w");
+            	else this.sendNextTurn(player);
             }
         } else {
             System.out.println("Jogada Invalida");
@@ -369,24 +361,72 @@ class ServerBoard {
         this.boardMatrix[i][j] = 0;
     }
 
-    public int getInboardEnemyPieces(int player) {
-        int enemy = player == 0 ? (1+1) : (0+1);
+    public int getInboardPlayerPieces(int player) {
+        // int enemy = player == 0 ? (1+1) : (0+1);
         int number = 0;
         for(int i=0; i < 5; i++) {
             for(int j=0; j < 6; j++) {
-                if(this.boardMatrix[i][j] == enemy) number++;
+                if(this.boardMatrix[i][j] == player+1) number++;
             }
         }
         return number;
     }
 
-    public boolean canKillAnother(int player, int i, int j) {
+	public boolean canMoveOnDirection(int i, int j, String dir) {
+		boolean u = i > 0 && this.posIsEmpty(i-1, j);
+		boolean d = i < 4 && this.posIsEmpty(i+1, j);
+		boolean l = j > 0 && this.posIsEmpty(i, j-1);
+		boolean r = j < 5 && this.posIsEmpty(i, j+1);
+		
+		if(dir == null || dir.equals("")) return (u || d || l || r);
+        switch(dir) {
+		    case "u": return u;
+		    case "d": return d;
+		    case "l": return l;
+			case "r": return r;
+		    default: return false;
+        }
+    }
+
+    public boolean canKillOnDirection(int player, int i, int j, String dir) {
         int enemy = player == 0 ? 1+1 : 0+1;
-        boolean u =  i > 1 && this.getPiece(i-1, j) == enemy && this.posIsEmpty(i-2, j) ? true : false;
-        boolean d =  i < 3 && this.getPiece(i+1, j) == enemy && this.posIsEmpty(i+2, j) ? true : false;
-        boolean l =  j > 1 && this.getPiece(i, j-1) == enemy && this.posIsEmpty(i, j-2) ? true : false;
-        boolean r =  j < 4 && this.getPiece(i, j+1) == enemy && this.posIsEmpty(i, j+2) ? true : false;
-        return (u || d || l || r);
+        boolean u =  i > 1 && this.getPiece(i-1, j) == enemy && this.posIsEmpty(i-2, j);
+        boolean d =  i < 3 && this.getPiece(i+1, j) == enemy && this.posIsEmpty(i+2, j);
+        boolean l =  j > 1 && this.getPiece(i, j-1) == enemy && this.posIsEmpty(i, j-2);
+        boolean r =  j < 4 && this.getPiece(i, j+1) == enemy && this.posIsEmpty(i, j+2);
+        if(dir == null || dir.equals("")) return (u || d || l || r);
+
+        switch(dir) {
+		    case "u": return u;
+		    case "d": return d;
+		    case "l": return l;
+			case "r": return r;
+		    default: return false;
+        }
+    }
+
+    public boolean canMoveOrKillAny(int player, int i, int j) {
+    	return this.canMoveOnDirection(i, j, null) || this.canKillOnDirection(player, i, j, null);
+    }
+
+	public boolean canPlayerMakeAnyKill(int player) {
+    	for(int i=0; i<5; i++) {
+    		for(int j=0; j<6; j++) {
+    			int piece = this.boardMatrix[i][j];
+    			if(piece == (player+1) && this.canKillOnDirection(player, i, j, null)) return true;
+    		}
+    	}
+    	return false;
+    }
+    
+    public boolean canPlayerMakeAnyMove(int player) {
+    	for(int i=0; i<5; i++) {
+    		for(int j=0; j<6; j++) {
+    			int piece = this.boardMatrix[i][j];
+    			if(piece == (player+1) && this.canMoveOrKillAny(player, i, j)) return true;
+    		}
+    	}
+    	return false;
     }
 
     public boolean posIsEmpty(int i, int j) {
@@ -396,5 +436,28 @@ class ServerBoard {
     public boolean areDifferentPieces(int[] p1, int[] p2) {
         System.out.println("P1: " + this.boardMatrix[p1[0]][p1[1]] + " P2: " + this.boardMatrix[p2[0]][p2[1]]);
         return this.boardMatrix[p1[0]][p1[1]] != this.boardMatrix[p2[0]][p2[1]];
+    }
+    
+    public int detectGameEnd(int piecesP1, int piecesP2) {    	
+    	int boardP1 = this.getInboardPlayerPieces(0);
+    	int boardP2 = this.getInboardPlayerPieces(1);
+
+    	if(piecesP1 == 0 && (boardP1 == 0 || !this.canPlayerMakeAnyMove(0))) {
+    		System.out.println("Winner 2");
+    		return 1;
+    	} else if(piecesP2 == 0 && (boardP2 == 0 || !this.canPlayerMakeAnyMove(1))) {
+    		System.out.println("Winner 1");
+    		return 0;
+    	} else {
+    		if(piecesP1 == 0 && piecesP2 == 0 && boardP1 <= 3 && boardP2 <= 3 && !this.canPlayerMakeAnyKill(0) && !this.canPlayerMakeAnyKill(1)) {
+    			System.out.println("DRAW");
+    			this.printBoard();
+    			System.out.println("BP1: " + boardP1 + " BP2: " + boardP2);
+    			return 2;
+    		}
+    	}
+    	
+    	System.out.println("Goes on...");
+    	return -1;
     }
 }
