@@ -1,7 +1,4 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.EOFException;
-import java.io.IOException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -74,19 +71,19 @@ class Server {
         return playerOfTurn;
     }
 
-    public void acceptClient(int id) {
-        try{
-            Socket newSocket = this.serverSocket.accept();
-            DataInputStream input = new DataInputStream(newSocket.getInputStream());
-            DataOutputStream output = new DataOutputStream(newSocket.getOutputStream());
-            ServerClientListener client = new ServerClientListener(newSocket, input, output, id, this);
-            this.outputs.add(output);
-            this.clientListeners.add(client);
-            client.start();
-        } catch(Exception e) {
-            System.out.println(e);
-        }
-    }
+    // public void acceptClient(int id) {
+    //     try{
+    //         Socket newSocket = this.serverSocket.accept();
+    //         DataInputStream input = new DataInputStream(newSocket.getInputStream());
+    //         DataOutputStream output = new DataOutputStream(newSocket.getOutputStream());
+    //         ServerClientListener client = new ServerClientListener(newSocket, input, output, id, this);
+    //         this.outputs.add(output);
+    //         this.clientListeners.add(client);
+    //         client.start();
+    //     } catch(Exception e) {
+    //         System.out.println(e);
+    //     }
+    // }
 
     public void receivedMessage(int player, String json) {
         MessageHelper jsonHelper = new MessageHelper(json);
@@ -117,7 +114,7 @@ class Server {
         if(this.playerPieces[player] > 0 && this.board.posIsEmpty(pos[0], pos[1])) {
             this.playerPieces[player]--;
             this.board.insertPieceOnBoard(player+1, pos);
-            
+
             int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
             this.sendGameUpdate(player, "i", pos, null);
             if(winState != -1) {
@@ -154,7 +151,7 @@ class Server {
 
     public void movePiece(String move, int[] movedPiece, int[] killedPiece, int player) {
         int[] oldPos = {movedPiece[0], movedPiece[1]};
-        
+
         switch(move) {
 	        case "u": movedPiece[0] += killedPiece != null ? -2 : -1; break;
 		    case "d": movedPiece[0] += killedPiece != null ?  2 :  1; break;
@@ -162,7 +159,7 @@ class Server {
 			case "r": movedPiece[1] += killedPiece != null ?  2 :  1; break;
 		    default: break;
         }
-        
+
         this.board.updateBoard(oldPos, movedPiece, killedPiece);
         this.sendGameUpdate(player, move, oldPos, killedPiece);
         int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
@@ -198,8 +195,8 @@ class Server {
         if(enemy != 0 && player != (enemy-1)) {
             this.board.removePiece(remPos[0], remPos[1]);
             this.sendGameUpdate(player, "e", remPos, null);
-            
-            int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]); 
+
+            int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
             if(pos != null && this.board.getInboardPlayerPieces(1-player) > 0 && this.board.canKillOnDirection(player, pos[0], pos[1], null)) {
             	this.sendGameUpdate(player, "m", null, null);
             } else {
@@ -377,7 +374,7 @@ class ServerBoard {
 		boolean d = i < 4 && this.posIsEmpty(i+1, j);
 		boolean l = j > 0 && this.posIsEmpty(i, j-1);
 		boolean r = j < 5 && this.posIsEmpty(i, j+1);
-		
+
 		if(dir == null || dir.equals("")) return (u || d || l || r);
         switch(dir) {
 		    case "u": return u;
@@ -418,7 +415,7 @@ class ServerBoard {
     	}
     	return false;
     }
-    
+
     public boolean canPlayerMakeAnyMove(int player) {
     	for(int i=0; i<5; i++) {
     		for(int j=0; j<6; j++) {
@@ -437,8 +434,8 @@ class ServerBoard {
         System.out.println("P1: " + this.boardMatrix[p1[0]][p1[1]] + " P2: " + this.boardMatrix[p2[0]][p2[1]]);
         return this.boardMatrix[p1[0]][p1[1]] != this.boardMatrix[p2[0]][p2[1]];
     }
-    
-    public int detectGameEnd(int piecesP1, int piecesP2) {    	
+
+    public int detectGameEnd(int piecesP1, int piecesP2) {
     	int boardP1 = this.getInboardPlayerPieces(0);
     	int boardP2 = this.getInboardPlayerPieces(1);
 
@@ -456,7 +453,7 @@ class ServerBoard {
     			return 2;
     		}
     	}
-    	
+
     	System.out.println("Goes on...");
     	return -1;
     }
