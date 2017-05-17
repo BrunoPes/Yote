@@ -1,26 +1,32 @@
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.util.ArrayList;
+import java.rmi.*;
 
-class Server {
+class Server extends UnicastRemoteObject implements ServerRMI {
     static int port = 9090;
-    private ServerSocket serverSocket = null;
-    private ArrayList<DataOutputStream> outputs = new ArrayList<DataOutputStream>();
-    private ArrayList<ServerClientListener> clientListeners = new ArrayList<ServerClientListener>();
+    private ArrayList<Client> clients = new ArrayList<Client>();
     private ServerBoard board = new ServerBoard();
     private int playerOfTurn = -1;
     private int[] playerPieces = {12,12};
     private boolean canMove = true;
 
-    public Server() {
-        try{
-            this.serverSocket = new ServerSocket(port);
-        } catch(IOException e) {
+    public Server() throws RemoteException {
+    	// super();
+        try {
+            Naming.rebind("//localhost/YoteServer", this);
+            System.out.println("Servidor Registrado!");
+        } catch(Exception e) {
             e.printStackTrace();
         }
+    }
 
-        this.waitClients();
+
+    public void registerClient(String clientName, int id) {        
+    	this.clients.add((Client)Naming.lookup(clientName));
+    	if(this.clients.length == 2) {
+            for(Client client : this.clients)
+                client.startGame();
+    	}
     }
 
     public void waitClients(){
@@ -232,9 +238,10 @@ class Server {
         }
     }
 
-    public static void main(String args[]) {
-        new Server();
-    }
+	public static void main(String args[]) {
+        Server server = new Server();
+		
+	}
 }
 
 class ServerClientListener extends Thread {

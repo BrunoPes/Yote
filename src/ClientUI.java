@@ -3,26 +3,13 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
+import java.awt.event.*;
+import java.rmi.*;
 
-import javax.swing.BorderFactory;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.ScrollPaneConstants;
+import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 
-class YoteGame extends JFrame implements MouseListener, KeyListener {
+class ClientUI extends JFrame implements MouseListener, KeyListener {
     private static final long serialVersionUID = 1L;
     private int id;
     private int[] selected;
@@ -227,6 +214,10 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
         if(!connectEnabled) this.requestFocus();
     }
 
+
+
+
+
     public void updateChat(String msg) {
         this.countMsgs++;
         this.chat.setText(this.chat.getText() + msg + "\n");
@@ -334,6 +325,12 @@ class YoteGame extends JFrame implements MouseListener, KeyListener {
         JOptionPane.showMessageDialog(this, msg, "Fim de Jogo", JOptionPane.INFORMATION_MESSAGE);
         this.requestFocus();
     }
+
+
+
+
+
+
 
     public void keyPressed(KeyEvent e) {
         int keyCode = e.getKeyCode();
