@@ -3,7 +3,6 @@ import java.util.ArrayList;
 import java.rmi.*;
 
 class Server extends UnicastRemoteObject implements ServerRMI {
-    static int port = 9090;
     private ArrayList<Client> clients = new ArrayList<Client>();
     private ServerBoard board = new ServerBoard();
     private int playerOfTurn = -1;
@@ -21,7 +20,7 @@ class Server extends UnicastRemoteObject implements ServerRMI {
     }
 
 
-    public void registerClient(String clientName, int id) {        
+    public void registerClient(String clientName, int id) {
     	this.clients.add((Client)Naming.lookup(clientName));
     	if(this.clients.length == 2) {
             for(Client client : this.clients)
@@ -240,7 +239,7 @@ class Server extends UnicastRemoteObject implements ServerRMI {
 
 	public static void main(String args[]) {
         Server server = new Server();
-		
+
 	}
 }
 

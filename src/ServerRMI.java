@@ -5,7 +5,7 @@ interface ServerRMI extends Remote {
     public void insertPiece(int player, int[] pos) throws RemoteException;
     public void killPiece(int player, int[] pos) throws RemoteException;
     public void movePiece(int[] oldPos, int[] newPos) throws RemoteException;
-    public void changeTurn(int player) throws RemoteException;
+    public void changeTurn() throws RemoteException;
 
     public void giveUpGame(int player) throws RemoteException;
     public void finishGame(int player) throws RemoteException;

@@ -7,10 +7,10 @@ import javax.swing.JOptionPane;
 class Client extends UnicastRemoteObject implements ClientRMI {
 	private String hostName;
 	private String hostServer;
-	private YoteGame clientGame;
+	private ClientUI clientGame;
 	private ServerRMI server;
 
-	public Client(YoteGame game, String playerName) {
+	public Client(ClientUI game, String playerName) {
 		this.clientGame = game;
 		this.hostName = playerName;
 
@@ -24,7 +24,7 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 
 	public void getServerRMI(String host) {
 		this.hostServer = host.length() == 0 ? "//localhost/YoteServer" : host;
-		
+
 		try {
 			this.server = (ServerRMI) Naming.lookup(this.hostServer);
         	System.out.println("Objeto Localizado!");
@@ -38,15 +38,60 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 		}
 	}
 
-	public void chatMessageUpdate(String msg) {
-		String chatMsg = (new MessageHelper(msg)).getChatMessage();
-		if(chatMsg != null) this.clientGame.updateChat(chatMsg);
+	public void updateChat(String msg) {
+		if(chatMsg != null)
+			this.clientGame.updateChat(msg);
+	}
+
+	public void insertPiece(int player, int[] pos) {
+		this.clientGame.insertPiece();
+	}
+
+	public void killPiece(int player) {
+		this.clientGame.killPiece(player, pos);
+	}
+
+	public void multkillPiece(int player, int[] pos) {
+		if(this.clientGame.multkillPiece(player, pos))
+			this.ServerRMI.changeTurn();
+	}
+
+	public void removePiece(int player, int[] pos) {
+		this.clientGame.removePiece(player, pos);
+	}
+
+	public void movePiece(int[] oldPos, int[] newPos) {
+		this.clientGame.movePiece(oldPos, newPos);
+	}
+
+	public void changeTurn(int player) {
+		this.clientGame.changeTurn(player);
+	}
+
+	public void connected(int player) {
+		this.clientGame.connected(player);
+	}
+
+	public void giveUpGame(int player) {
+		this.clientGame.finishGame(-1, player, true);
+	}
+
+	public void restartGame(int player) {
+		this.clientGame.restartGame(player);
+	}
+
+	public void playerWin(int player) {
+		this.clientGame.playerWin(player);
+	}
+
+	public void gameOver() {
+		this.clientGame.gameOver();
 	}
 
 	public void receivedMovement(String json) {
 		MessageHelper jsonObj = new MessageHelper(json);
 		String substr = json.indexOf("a:rg") >= 0 ? "rg" : (json.indexOf("a:wr") >= 0 ? "wr" : null);
-		
+
 		String move = substr != null ? substr : jsonObj.getAction();
 		int player = jsonObj.getPlayer();
 		int[] movedPos = jsonObj.getMovedPos();

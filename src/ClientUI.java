@@ -214,104 +214,9 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         if(!connectEnabled) this.requestFocus();
     }
 
-
-
-
-
-    public void updateChat(String msg) {
-        this.countMsgs++;
-        this.chat.setText(this.chat.getText() + msg + "\n");
-        if(countMsgs > 400)
-            this.chat.setText("");
-    }
-
-    public void updateGame(int player, String action, int[] movedPiece, int[] killedPiece) {
-        if(action.equals("c")) {
-            this.id = player;
-            this.playerCol = this.id == 0 ? Color.BLACK : Color.WHITE;
-            this.otherCol = this.id == 0 ? Color.WHITE : Color.BLACK;
-            this.updateButtons(false);
-            this.updateLabels(true);
-        } else if(action.equals("t")) {
-            this.selected = null;
-            this.shouldKill = false;
-            this.shouldContinue = false;
-            this.isMyTurn = (player == this.id) ? true : false;
-            this.updateLabels(false);
-        } else if(action.equals("i")) {
-            Piece newPiece = new Piece(player == this.id ? this.playerCol : this.otherCol);
-            JPanel field = this.getFieldInPos(movedPiece[0], movedPiece[1]);
-            field.setLayout(null);
-            field.add(newPiece);
-
-            if(player == 0) this.player1Num.setText("Peças para inserir: " + (--this.playersQnt[player]));
-            else this.player2Num.setText("Peças para inserir: " + (--this.playersQnt[player]));
-            this.stateLabels.updateUI();
-            field.updateUI();
-        } else if(action.equals("u") || action.equals("d") || action.equals("l") || action.equals("r")) {
-            boolean anyKill = (killedPiece != null) ? true : false;
-            JPanel oldField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
-            JPanel killField = anyKill ? this.getFieldInPos(killedPiece[0], killedPiece[1]) : null;
-            int[] newPos;
-
-            if(action.equals("u")) {
-                newPos = new int[]{movedPiece[0] + (anyKill ? -2 : -1), movedPiece[1]};
-            } else if(action.equals("d")) {
-                newPos = new int[]{movedPiece[0] + (anyKill ? 2 : 1), movedPiece[1]};
-            } else if(action.equals("r")) {
-                newPos = new int[]{movedPiece[0], movedPiece[1] + (anyKill ? 2 : 1)};
-            } else {
-                newPos = new int[]{movedPiece[0], movedPiece[1] + (anyKill ? -2 : -1)};
-            }
-
-            JPanel newField = this.getFieldInPos(newPos[0], newPos[1]);
-            newField.setLayout(null);
-            newField.add(new Piece(player == this.id ? this.playerCol : this.otherCol));
-            oldField.removeAll();
-            this.selected = null;
-            if(killField != null) {
-                killField.removeAll();
-                if(this.id == player) this.selected = new int[]{newPos[0], newPos[1]};
-            }
-            this.gameBoard.updateUI();
-        } else if(action.equals("k") && this.id == player) {
-            this.shouldKill = true;
-            this.helpLabel.setText("Remova uma peça do oponente");
-            this.helpLabel.updateUI();
-        } else if(action.equals("e")) {
-            if(this.id == player) this.shouldKill = false;
-            JPanel removedPieceField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
-            removedPieceField.removeAll();
-            this.gameBoard.updateUI();
-        } else if(action.equals("m") && this.id == player) {
-            Component moved= this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
-            if(moved != null && moved instanceof Piece) {
-                this.shouldKill = false;
-                this.shouldContinue = true;
-                ((Piece)moved).updateColor(Color.BLUE);
-                this.helpLabel.setText("Faça uma captura múltipla");
-                this.helpLabel.updateUI();
-            } else {
-                this.client.sendMovement("t", null, null);
-            }
-        } else if(action.equals("g")) {
-            this.finishGame(-1, player, true);
-        } else if(action.equals("rg")) {
-            int winner = this.id == player ? (1-this.id) : this.id;
-            this.finishGame(winner, -1, true);
-        } else if(action.equals("w")) {
-            this.finishGame(player, -1, false);
-            this.canRestart = true;
-        } else if(action.equals("wr")) {
-            this.resetStateAndUI();
-            this.isMyTurn = (player == this.id) ? true : false;
-            this.updateLabels(false);
-        }
-    }
-
     public void finishGame(int winPlayer, int giveUpPlayer, boolean shouldResetUI) {
         if(shouldResetUI) this.resetStateAndUI();
-        
+
         String msg;
         if(giveUpPlayer >= 0) {
             msg = this.id == giveUpPlayer ? "Você perdeu por desistência" : "Parabéns, você venceu! Seu oponente desistiu!";
@@ -321,16 +226,117 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         } else {
             msg = "Empate! Nesse jogo não haverá vencedores.";
         }
-        
+
         JOptionPane.showMessageDialog(this, msg, "Fim de Jogo", JOptionPane.INFORMATION_MESSAGE);
         this.requestFocus();
     }
 
+    public void updateChat(String msg) {
+        this.countMsgs++;
+        this.chat.setText(this.chat.getText() + msg + "\n");
 
+        if(countMsgs > 400) this.chat.setText("");
+    }
 
+    public void connected(int player) {
+        this.id = player;
+        this.playerCol = this.id == 0 ? Color.BLACK : Color.WHITE;
+        this.otherCol = this.id == 0 ? Color.WHITE : Color.BLACK;
+        this.updateButtons(false);
+        this.updateLabels(true);
+    }
 
+    public void insertPiece(int player, int[] pos) {
+        Piece newPiece = new Piece(player == this.id ? this.playerCol : this.otherCol);
+        JPanel field = this.getFieldInPos(movedPiece[0], movedPiece[1]);
+        field.setLayout(null);
+        field.add(newPiece);
 
+        if(player == 0) this.player1Num.setText("Peças para inserir: " + (--this.playersQnt[player]));
+        else this.player2Num.setText("Peças para inserir: " + (--this.playersQnt[player]));
+        this.stateLabels.updateUI();
+        field.updateUI();
+    }
 
+    public void movePiece(int[] oldPos, int[] newPos) {
+        boolean anyKill = (killedPiece != null) ? true : false;
+        JPanel oldField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
+        JPanel killField = anyKill ? this.getFieldInPos(killedPiece[0], killedPiece[1]) : null;
+        int[] newPos;
+
+        if(action.equals("u")) {
+            newPos = new int[]{movedPiece[0] + (anyKill ? -2 : -1), movedPiece[1]};
+        } else if(action.equals("d")) {
+            newPos = new int[]{movedPiece[0] + (anyKill ? 2 : 1), movedPiece[1]};
+        } else if(action.equals("r")) {
+            newPos = new int[]{movedPiece[0], movedPiece[1] + (anyKill ? 2 : 1)};
+        } else {
+            newPos = new int[]{movedPiece[0], movedPiece[1] + (anyKill ? -2 : -1)};
+        }
+
+        JPanel newField = this.getFieldInPos(newPos[0], newPos[1]);
+        newField.setLayout(null);
+        newField.add(new Piece(player == this.id ? this.playerCol : this.otherCol));
+        oldField.removeAll();
+        this.selected = null;
+        if(killField != null) {
+            killField.removeAll();
+            if(this.id == player) this.selected = new int[]{newPos[0], newPos[1]};
+        }
+        this.gameBoard.updateUI();
+    }
+
+    public void killPiece(int player) {
+        if(this.id == player) {
+            this.shouldKill = true;
+            this.helpLabel.setText("Remova uma peça do oponente");
+            this.helpLabel.updateUI();
+        }
+    }
+
+    public boolean multkillPiece(int player, int[] pos) {
+        Component moved = this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
+        if(moved != null && moved instanceof Piece) {
+            this.shouldKill = false;
+            this.shouldContinue = true;
+            ((Piece)moved).updateColor(Color.BLUE);
+            this.helpLabel.setText("Faça uma captura múltipla");
+            this.helpLabel.updateUI();
+            return false;
+        }
+
+        return true;
+    }
+
+    public void removePiece(int player, int[] pos) {
+        if(this.id == player) this.shouldKill = false;
+        JPanel removedPieceField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
+        removedPieceField.removeAll();
+        this.gameBoard.updateUI();
+    }
+
+    public void changeTurn(int player) {
+        this.selected = null;
+        this.shouldKill = false;
+        this.shouldContinue = false;
+        this.isMyTurn = (player == this.id) ? true : false;
+    }
+
+    public void restartGame(int player) {
+        int winner = this.id == player ? (1-this.id) : this.id;
+        this.finishGame(winner, -1, true);
+    }
+
+    public void playerWin(int player) {
+        this.finishGame(player, -1, false);
+        this.canRestart = true;
+    }
+
+    public void gameOver() {
+        this.resetStateAndUI();
+        this.isMyTurn = (player == this.id) ? true : false;
+        this.updateLabels(false);
+    }
 
     public void keyPressed(KeyEvent e) {
         int keyCode = e.getKeyCode();
