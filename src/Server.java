@@ -19,7 +19,6 @@ class Server extends UnicastRemoteObject implements ServerRMI {
         }
     }
 
-
     public void registerClient(String clientName, int id) {
     	this.clients.add((Client)Naming.lookup(clientName));
     	if(this.clients.length == 2) {
@@ -76,59 +75,28 @@ class Server extends UnicastRemoteObject implements ServerRMI {
         return playerOfTurn;
     }
 
-    // public void acceptClient(int id) {
-    //     try{
-    //         Socket newSocket = this.serverSocket.accept();
-    //         DataInputStream input = new DataInputStream(newSocket.getInputStream());
-    //         DataOutputStream output = new DataOutputStream(newSocket.getOutputStream());
-    //         ServerClientListener client = new ServerClientListener(newSocket, input, output, id, this);
-    //         this.outputs.add(output);
-    //         this.clientListeners.add(client);
-    //         client.start();
-    //     } catch(Exception e) {
-    //         System.out.println(e);
-    //     }
-    // }
 
-    public void receivedMessage(int player, String json) {
-        MessageHelper jsonHelper = new MessageHelper(json);
-        String action = jsonHelper.getAction();
-        if(action.equals("i")){
-            this.testAndInsertPiece(player, jsonHelper.getMovedPos());
-        } else if(action.equals("k")) {
-            this.sendRemovePiece(player, jsonHelper.getMovedPos(), jsonHelper.getKilledPos());
-        } else if(action.equals("t")) {
-            this.sendNextTurn(player);
-        } else if(action.equals("g")) {
-            this.sendFinishGame(player, "g");
-        } else if(json.indexOf("a:rg,") >= 0) {
-            System.out.println("Reset");
-            this.sendFinishGame(player, "rg");
-            this.sendNextTurn(player);
-        } else if(json.indexOf("a:wr,") >= 0) {
-        	System.out.println("Restartando ok");
-        	this.board.printBoard();
-        	this.playerOfTurn = player;
-        	this.sendGameUpdate(this.playerOfTurn, "wr", null, null);
-        } else {
-            this.testAndMovePiece(jsonHelper.getAction(), jsonHelper.getMovedPos(), player);
-        }
-    }
 
-    public void testAndInsertPiece(int player, int[] pos) {
+    ///////////////////// AQUII ////////////////////
+
+    public void insertPiece(int player, int[] pos) {
         if(this.playerPieces[player] > 0 && this.board.posIsEmpty(pos[0], pos[1])) {
             this.playerPieces[player]--;
             this.board.insertPieceOnBoard(player+1, pos);
 
+            for(Client client : this.clients)
+                client.insertPiece(player, pos);
+
             int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
-            this.sendGameUpdate(player, "i", pos, null);
             if(winState != -1) {
-            	this.sendFinishGame(winState, "w");
+                this.resetGameState();
+                for(Client client : this.clients)
+                    client.playerWin(winState);
             } else {
-            	this.sendNextTurn(player);
+                this.changeTurn();
             }
         } else {
-            System.out.println("Jogada Invalida");
+            System.out.println("Jogada Inválida");
         }
     }
 
@@ -138,19 +106,19 @@ class Server extends UnicastRemoteObject implements ServerRMI {
         int j = selected[1];
 
         switch(move) {
-		    case "u": nearPiece = i > 0 ? new int[]{i-1, j} : null; break;
-		    case "d": nearPiece = i < 4 ? new int[]{i+1, j} : null; break;
-		    case "l": nearPiece = j > 0 ? new int[]{i, j-1} : null; break;
-			case "r": nearPiece = j < 5 ? new int[]{i, j+1} : null; break;
-		    default: break;
+            case "u": nearPiece = i > 0 ? new int[]{i-1, j} : null; break;
+            case "d": nearPiece = i < 4 ? new int[]{i+1, j} : null; break;
+            case "l": nearPiece = j > 0 ? new int[]{i, j-1} : null; break;
+            case "r": nearPiece = j < 5 ? new int[]{i, j+1} : null; break;
+            default: break;
         }
 
         if(this.board.canKillOnDirection(player, i, j, move)) {
-        	this.movePiece(move, selected, nearPiece, player);
+            this.movePiece(move, selected, nearPiece, player);
         } else if(this.board.canMoveOnDirection(i, j, move) && this.canMove) {
-        	this.movePiece(move, selected, null, player);
+            this.movePiece(move, selected, null, player);
         } else {
-        	System.out.println("Jogada Inválida");
+            System.out.println("Jogada Inválida");
         }
     }
 
@@ -158,88 +126,100 @@ class Server extends UnicastRemoteObject implements ServerRMI {
         int[] oldPos = {movedPiece[0], movedPiece[1]};
 
         switch(move) {
-	        case "u": movedPiece[0] += killedPiece != null ? -2 : -1; break;
-		    case "d": movedPiece[0] += killedPiece != null ?  2 :  1; break;
-		    case "l": movedPiece[1] += killedPiece != null ? -2 : -1; break;
-			case "r": movedPiece[1] += killedPiece != null ?  2 :  1; break;
-		    default: break;
+            case "u": movedPiece[0] += killedPiece != null ? -2 : -1; break;
+            case "d": movedPiece[0] += killedPiece != null ?  2 :  1; break;
+            case "l": movedPiece[1] += killedPiece != null ? -2 : -1; break;
+            case "r": movedPiece[1] += killedPiece != null ?  2 :  1; break;
+            default: break;
         }
 
         this.board.updateBoard(oldPos, movedPiece, killedPiece);
-        this.sendGameUpdate(player, move, oldPos, killedPiece);
+        for(Client client : this.clients)
+            client.movePiece(player, move, oldPos, killedPiece);
+
         int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
         if(winState != -1) {
-        	this.sendFinishGame(winState, "w");
+            this.resetGameState();
+            for(Client client : this.clients)
+                client.playerWin(winState);
         } else {
-        	if(killedPiece == null || this.board.getInboardPlayerPieces(1-player) == 0) {
-                this.sendNextTurn(player);
+            if(killedPiece == null || this.board.getInboardPlayerPieces(1-player) == 0) {
+                this.changeTurn();
             } else {
-                this.sendKillPiece(player);
+                this.canMove = false;
+                for(Client client : this.clients)
+                    client.killPiece(this.playerOfTurn);
             }
         }
     }
 
-    public void sendFinishGame(int player, String type) {
-        this.resetGameState();
-        this.sendGameUpdate(player, type, null, null);
-    }
-
-    public void sendNextTurn(int nowPlayer) {
-        this.canMove = true;
-        this.playerOfTurn = nowPlayer == 0 ? 1 : 0;
-        this.sendGameUpdate(this.playerOfTurn, "t", null, null);
-    }
-
-    public void sendKillPiece(int player) {
-        this.canMove = false;
-        this.sendGameUpdate(this.playerOfTurn, "k", null, null);
-    }
-
-    public void sendRemovePiece(int player, int[] pos, int[] remPos) {
+    public void removePiece(int player, int[] pos) {
         int enemy = this.board.getPiece(remPos[0], remPos[1]);
         if(enemy != 0 && player != (enemy-1)) {
             this.board.removePiece(remPos[0], remPos[1]);
-            this.sendGameUpdate(player, "e", remPos, null);
+            for(Client client : this.clients)
+                client.removePiece(player, pos);
 
             int winState = this.board.detectGameEnd(this.playerPieces[0], this.playerPieces[1]);
             if(pos != null && this.board.getInboardPlayerPieces(1-player) > 0 && this.board.canKillOnDirection(player, pos[0], pos[1], null)) {
-            	this.sendGameUpdate(player, "m", null, null);
+                for(Client client : this.clients)
+                    client.multkillPiece(player);
             } else {
-            	if(winState != -1) this.sendFinishGame(winState, "w");
-            	else this.sendNextTurn(player);
+                if(winState != -1) {
+                    this.resetGameState();
+                    for(Client client : this.clients)
+                        client.playerWin(winState);
+                } else {
+                    for(Client client : this.clients)
+                        client.changeTurn(player);
+                }
             }
         } else {
-            System.out.println("Jogada Invalida");
+            System.out.println("Jogada Inválida");
         }
     }
 
-    public void sendGameUpdate(int player, String action, int[] movedPiece, int[] killedPiece) {
-        for(DataOutputStream output : outputs) {
-            try{
-                String moveMsg = movedPiece != null ? new String(",m:"+movedPiece[0]+""+movedPiece[1]) : "";
-                String killMsg = killedPiece != null ? new String(",k:"+killedPiece[0]+""+killedPiece[1]) : "";
-                output.writeUTF("p:"+player + ",a:"+ action + moveMsg + killMsg);
-                output.flush();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
+    public void changeTurn() {
+        this.canMove = true;
+        this.playerOfTurn = 1 - this.playerOfTurn;
+        for(Client client : this.clients)
+            client.changeTurn(this.playerOfTurn);
     }
 
-    public void sendChatUpdate(String msg) {
-        for(DataOutputStream output : outputs) {
-            try{
-                output.writeUTF(msg);
-                output.flush();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
+    public void giveUpGame(int player) {
+        this.resetGameState();
+        for(Client client : this.clients)
+            client.giveUpGame(player);
     }
+
+    public void restartGame(int player) {
+        System.out.println("Reset");
+        this.resetGameState();
+        for(Client client : this.clients)
+            client.restartGame(player);
+        this.changeTurn();
+    }
+
+    public void finishGame(int player) {
+        System.out.println("Restartando ok");
+        this.board.printBoard();
+        this.playerOfTurn = player;
+        for(Client client : this.clients)
+            client.gameOver(this.playerOfTurn);
+    }
+
+    public void updateChat(String msg) {
+        for(Client client : this.clients)
+            client.updateChat(msg);
+    }
+
+    public void registerClient(String playerName, int id) {
+
+    }
+    //////////////////// TÉRMINO ////////////////////
 
 	public static void main(String args[]) {
         Server server = new Server();
-
 	}
 }
 

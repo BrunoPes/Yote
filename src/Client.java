@@ -20,9 +20,11 @@ class Client extends UnicastRemoteObject implements ClientRMI {
         } catch(Exception e) {
             e.printStackTrace();
         }
+
+        this.lookupServer("");
 	}
 
-	public void getServerRMI(String host) {
+	public void lookupServer(String host) {
 		this.hostServer = host.length() == 0 ? "//localhost/YoteServer" : host;
 
 		try {
@@ -36,6 +38,10 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	public void getServer() {
+		return this.server;
 	}
 
 	public void updateChat(String msg) {
@@ -60,8 +66,8 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 		this.clientGame.removePiece(player, pos);
 	}
 
-	public void movePiece(int[] oldPos, int[] newPos) {
-		this.clientGame.movePiece(oldPos, newPos);
+	public void movePiece(int player, String move, int[] oldPos, int[] killedPiece) {
+		this.clientGame.movePiece(player, move, oldPos, killedPiece);
 	}
 
 	public void changeTurn(int player) {
@@ -84,37 +90,7 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 		this.clientGame.playerWin(player);
 	}
 
-	public void gameOver() {
-		this.clientGame.gameOver();
-	}
-
-	public void receivedMovement(String json) {
-		MessageHelper jsonObj = new MessageHelper(json);
-		String substr = json.indexOf("a:rg") >= 0 ? "rg" : (json.indexOf("a:wr") >= 0 ? "wr" : null);
-
-		String move = substr != null ? substr : jsonObj.getAction();
-		int player = jsonObj.getPlayer();
-		int[] movedPos = jsonObj.getMovedPos();
-		int[] killedPos = jsonObj.getKilledPos();
-
-		this.clientGame.updateGame(player, move, movedPos, killedPos);
-	}
-
-	public void sendChatMsg(String msg) {
-		try {
-			this.output.writeUTF("s:"+msg);
-		} catch(Exception e){
-			e.printStackTrace();
-		}
-	}
-
-	public void sendMovement(String move, int[] movedPiece, int[] lastMoved) {
-		try {
-			String last = lastMoved != null ? ",k:"+lastMoved[0]+""+lastMoved[1] : "";
-			String moved = movedPiece != null ? ",m:"+movedPiece[0]+""+movedPiece[1] : "";
-			this.output.writeUTF("a:"+move+moved+last);
-		} catch(Exception e){
-			e.printStackTrace();
-		}
+	public void gameOver(int player) {
+		this.clientGame.gameOver(player);
 	}
 }

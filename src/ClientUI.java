@@ -11,21 +11,23 @@ import javax.swing.text.DefaultCaret;
 
 class ClientUI extends JFrame implements MouseListener, KeyListener {
     private static final long serialVersionUID = 1L;
-    private int id;
-    private int[] selected;
     private Client client;
+
+    private int id;
+    private int countMsgs = 0;
+    private int[] selected;
+    private int[] playersQnt = new int[]{12, 12};
+    private boolean isMyTurn = false;
+    private boolean canRestart = false;
+    private boolean shouldKill = false;
+    private boolean shouldContinue = false;
+
     private Color playerCol;
     private Color otherCol;
     private JPanel gameBoard;
     private JTextArea chat;
     private JTextField input;
     private JTextField hostInput;
-    private int countMsgs = 0;
-    private int[] playersQnt = new int[]{12, 12};
-    private boolean isMyTurn = false;
-    private boolean canRestart = false;
-    private boolean shouldKill = false;
-    private boolean shouldContinue = false;
     private JButton connect;
     private JButton forfeit;
     private JButton restart;
@@ -156,7 +158,6 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         this.getContentPane().add(right);
         this.setVisible(true);
         this.requestFocus();
-        this.client = new Client(this);
     }
 
     public JPanel getFieldInPos(int i, int j) {
@@ -258,17 +259,17 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         field.updateUI();
     }
 
-    public void movePiece(int[] oldPos, int[] newPos) {
+    public void movePiece(int player, String move, int[] movedPiece, int[] killedPiece) {
         boolean anyKill = (killedPiece != null) ? true : false;
         JPanel oldField = this.getFieldInPos(movedPiece[0], movedPiece[1]);
         JPanel killField = anyKill ? this.getFieldInPos(killedPiece[0], killedPiece[1]) : null;
         int[] newPos;
 
-        if(action.equals("u")) {
+        if(move.equals("u")) {
             newPos = new int[]{movedPiece[0] + (anyKill ? -2 : -1), movedPiece[1]};
-        } else if(action.equals("d")) {
+        } else if(move.equals("d")) {
             newPos = new int[]{movedPiece[0] + (anyKill ? 2 : 1), movedPiece[1]};
-        } else if(action.equals("r")) {
+        } else if(move.equals("r")) {
             newPos = new int[]{movedPiece[0], movedPiece[1] + (anyKill ? 2 : 1)};
         } else {
             newPos = new int[]{movedPiece[0], movedPiece[1] + (anyKill ? -2 : -1)};
@@ -294,7 +295,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         }
     }
 
-    public boolean multkillPiece(int player, int[] pos) {
+    public boolean multkillPiece(int player) {
         Component moved = this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
         if(moved != null && moved instanceof Piece) {
             this.shouldKill = false;
@@ -332,7 +333,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         this.canRestart = true;
     }
 
-    public void gameOver() {
+    public void gameOver(int player) {
         this.resetStateAndUI();
         this.isMyTurn = (player == this.id) ? true : false;
         this.updateLabels(false);
@@ -342,19 +343,19 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         int keyCode = e.getKeyCode();
         if(((this.selected != null && this.isMyTurn && !this.shouldKill) || this.shouldContinue) && keyCode != 10) {
             if(keyCode == 37) {
-                this.client.sendMovement("l", this.selected, null);
+                this.client.getServer().testAndMovePiece("l", this.selected, this.id);
             } else if(keyCode == 39) {
-                this.client.sendMovement("r", this.selected, null);
+                this.client.getServer().testAndMovePiece("r", this.selected, this.id);
             }else if(keyCode == 38) {
-                this.client.sendMovement("u", this.selected, null);
+                this.client.getServer().testAndMovePiece("u", this.selected, this.id);
             } else if(keyCode == 40) {
-                this.client.sendMovement("d", this.selected, null);
+                this.client.getServer().testAndMovePiece("d", this.selected, this.id);
             }
         } else if(keyCode == 10) {
             String msg = this.input.getText();
             if(msg.length() > 0) {
+                this.client.getServer().updateChat("Player "+(this.id+1) + ": " + msg);
                 this.input.setText("");
-                this.client.sendChatMsg("Player "+(this.id+1)+": "+msg);
                 this.requestFocus();
             }
         }
@@ -365,67 +366,49 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
             JButton button = (JButton)e.getSource();
             switch(button.getText()) {
                 case "Conectar":
-                    String host = this.hostInput.getText();
+                    // String host = this.hostInput.getText();
+                    String name = this.hostInput.getText();
                     if(host.length() > 0 && host.indexOf(":") >= 0) {
-                        int portIndex = host.indexOf(":");
-                        int hostPort = new Integer(host.substring(portIndex+1));
-                        String hostIP = host.substring(0, portIndex);
-                        this.client.initSocket(hostIP, hostPort);
+                        this.client = new Client(this, name);
                     }
                     break;
                 case "Desistir":
-                    this.client.sendControlMsg("g", null);
+                    this.client.getServer().giveUpGame(this.id);
                     break;
                 case "Reiniciar":
-                    this.client.sendControlMsg(canRestart ? "wr" : "rg", null);
+                    if(canRestart)
+                        this.client.getServer().finishGame(this.id);
+                    else
+                        this.client.getServer().restartGame(this.id);
                     break;
                 default: break;
             }
         } else if(this.isMyTurn) {
             JPanel clickedField = ((JPanel)e.getSource());
+            Piece selectedPiece = (Piece)clickedField.getComponent(0);
             String strPos = clickedField.getName();
             int[] pos = {new Integer(strPos.substring(0, 1)), new Integer(strPos.substring(1))};
 
             if(!this.shouldKill && !this.shouldContinue) {
                 if(this.selected == null && clickedField.getComponentCount() == 0) {
-                    this.client.sendMovement("i", pos, null);
-                } else if(this.selected == null) {
-                    Piece selectedPiece = (Piece)clickedField.getComponent(0);
-                    if(selectedPiece.getPlayerPiece() == this.id) {
-                        selectedPiece.updateColor(Color.BLUE);
-                        this.selected = new int[]{pos[0], pos[1]};
-                    } else {
-                        //System.out.println("JOGADA INVALIDA");
-                    }
-                } else if(this.selected != null) {
-                    Piece selectedPiece = (Piece)clickedField.getComponent(0);
+                    this.client.getServer().insertPiece(this.id, pos);
+                } else if(this.selected == null && selectedPiece.getPlayerPiece() == this.id) {
+                    selectedPiece.updateColor(Color.BLUE);
+                    this.selected = new int[]{pos[0], pos[1]};
+                } else if(this.selected != null && selectedPiece.getPlayerPiece() == this.id) {
                     if(pos[0] == this.selected[0] && pos[1] == this.selected[1]) {
-                        if(selectedPiece.getPlayerPiece() == this.id) {
-                            selectedPiece.returnPreviousColor();
-                            this.selected = null;
-                        } else {
-                            //System.out.println("JOGADA INVALIDA SELECT");
-                        }
-                    } else if(selectedPiece.getPlayerPiece() == this.id) {
+                        selectedPiece.returnPreviousColor();
+                        this.selected = null;
+                    } else {
                         Piece previous = (Piece)this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
                         previous.returnPreviousColor();
-                        this.selected = new int[]{pos[0], pos[1]};
                         selectedPiece.updateColor(Color.BLUE);
+                        this.selected = new int[]{pos[0], pos[1]};
                     }
                 }
-            } else if(this.shouldKill) {
-                if(clickedField.getComponentCount() > 0) {
-                    Piece selectedPiece = (Piece)clickedField.getComponent(0);
-                    if(selectedPiece.getPlayerPiece() != this.id) {
-                        this.client.sendMovement("k", this.selected, pos);
-                    } else {
-                        System.out.println("Jogada Invalida: Remova uma peça inimiga");
-                    }
-                } else {
-                    System.out.println("Jogada Invalida: Remova uma peça inimiga");
-                }
-            }  else {
-                System.out.println("Capture uma peça ou termine sua jogada!!!");
+            } else if(this.shouldKill && clickedField.getComponentCount() > 0) {
+                if(selectedPiece.getPlayerPiece() != this.id)
+                    this.client.getServer().removePiece(this.id, pos);
             }
         }
     }
