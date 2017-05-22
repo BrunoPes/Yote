@@ -7,16 +7,16 @@ class Server extends UnicastRemoteObject implements ServerRMI {
     
     private static final long serialVersionUID = 1L;
     private ArrayList<ClientRMI> clients = new ArrayList<ClientRMI>();
+    private ArrayList<String> clientNames = new ArrayList<String>();
     private ServerBoard board = new ServerBoard();
     private int playerOfTurn = -1;
     private int[] playerPieces = {12,12};
     private boolean canMove = true;
 
     public Server() throws RemoteException {
-        // super();
         try {
-            Naming.rebind("//localhost/YoteServer", this);
-            System.out.println("Servidor Registrado!");
+            Naming.rebind("//localhost/YoteServer".toLowerCase(), this);
+            System.out.println("Servidor Registrado! localhost/YoteServer" );
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -24,8 +24,9 @@ class Server extends UnicastRemoteObject implements ServerRMI {
 
     public void registerClient(String clientName) {
         try {
-            this.clients.add((ClientRMI)Naming.lookup(clientName));
+            this.clients.add((ClientRMI)Naming.lookup("//localhost/" + clientName));
             this.clients.get(this.clients.size()-1).connected(this.clients.size()-1);
+            this.clientNames.add(clientName);
             if(this.clients.size() == 2) {
                 this.playerOfTurn = 0;
                 for(int i=0; i<2; i++) {
@@ -38,36 +39,7 @@ class Server extends UnicastRemoteObject implements ServerRMI {
             e.printStackTrace();
         }
     }
-
-    // public void waitClients(){
-    //     try {
-    //         while(true) {
-    //             if(this.clientListeners.size() < 2) {
-    //                 for(int i=0; i<2; i++) {
-    //                     System.out.println("Aguardando conexão...");
-    //                     this.acceptClient(i);
-    //                     System.out.println("Conexão Estabelecida.");
-    //                 }
-
-    //                 this.playerOfTurn = 0;
-    //                 this.sendGameUpdate(this.playerOfTurn, "t", null, null);
-    //             } else {
-    //                 int remove = 0;
-    //                 for(ServerClientListener client : this.clientListeners) {
-    //                     if(client == null || !client.isAlive()) {
-    //                         remove++;
-    //                     }
-    //                 }
-    //                 if(remove == 2) {
-    //                     this.resetClientSockets();
-    //                 }
-    //             }
-    //         }
-    //     } catch(Exception e){
-    //         System.out.println(e);
-    //     }
-    // }
-
+  
     public void resetGameState() {
         this.playerOfTurn = -1;
         this.playerPieces = new int[]{12,12};
@@ -75,8 +47,14 @@ class Server extends UnicastRemoteObject implements ServerRMI {
         this.board.resetBoard();
     }
 
-    public void resetClientSockets() {
-
+    public void resetClients(int player) {
+    	if(player >= 0) {
+    		this.clients.remove(player);
+    		this.giveUpGame(player);
+    	} else {
+    		this.clients.clear();
+    		this.clientNames.clear();
+    	}
     }
 
     public int getPlayerOfTurn() {
@@ -211,6 +189,7 @@ class Server extends UnicastRemoteObject implements ServerRMI {
             this.resetGameState();
             for(ClientRMI client : this.clients)
                 client.giveUpGame(player);
+            this.resetClients(-1);
         } catch(RemoteException e) {
             e.printStackTrace();
         }
@@ -230,8 +209,6 @@ class Server extends UnicastRemoteObject implements ServerRMI {
 
     public void finishGame(int player) {
         try{
-            System.out.println("Restartando ok");
-            this.board.printBoard();
             this.playerOfTurn = player;
             for(ClientRMI client : this.clients)
                 client.gameOver(this.playerOfTurn);

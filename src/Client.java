@@ -1,49 +1,72 @@
+import java.net.MalformedURLException;
 import java.rmi.Naming;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
-import javax.swing.JOptionPane;
-
 class Client extends UnicastRemoteObject implements ClientRMI {
 	private static final long serialVersionUID = 1L;
-	private String hostName;
+	private String playerName;
 	private String hostServer;
 	private ClientUI clientGame;
 	private ServerRMI server;
 
-	public Client(ClientUI game, String playerName) throws RemoteException {
+	public Client(ClientUI game, String hostName, String playerName) throws RemoteException {
 		this.clientGame = game;
-		this.hostName = "//localhost/" + playerName;
+		this.playerName = playerName;
 
 		try {
-            Naming.rebind(this.hostName, this);
-            System.out.println("Cliente "+ this.hostName +" Registrado!");
+            Naming.rebind("//localhost/" +this.playerName, this);
+            System.out.println("Cliente //localhost/"+ this.playerName +" Registrado!");
+            this.lookupServer(hostName);
         } catch(Exception e) {
             e.printStackTrace();
         }
 
-        this.lookupServer("");
+        
 	}
 
 	public void lookupServer(String host) {
-		this.hostServer = host.length() == 0 ? "//localhost/YoteServer" : host;
+		this.hostServer = host.length() == 0 ? "//localhost/YoteServer" : "//localhost/" + host;
 
 		try {
 			this.server = (ServerRMI) Naming.lookup(this.hostServer);
         	System.out.println("Objeto Localizado!");
-        	this.server.registerClient(this.hostName);
+        	this.server.registerClient(this.playerName);
 			this.clientGame.requestFocus();
 		} catch(RemoteException e) {
-			String errorMsg = "Verifique se o servidor está online e se a URL inserida está correta";
-			JOptionPane.showMessageDialog(this.clientGame, errorMsg, "Não foi possí­vel conectar-se ao Servidor", JOptionPane.ERROR_MESSAGE);
+			this.updateChat("ERRO DE CONEXÃO: Verifique se o nome servidor está correto e se ele está online");
 			e.printStackTrace();
-		} catch(Exception e) {
+		} catch(ClassCastException e) {
+			this.updateChat("ERRO DE CONEXÃO: Servidor não encontrado");
+			e.printStackTrace();
+		} catch(MalformedURLException e) {
+			this.updateChat("ERRO DE CONEXÃO: Servidor não encontrado");
+			e.printStackTrace();
+		} catch(NotBoundException e) {
+			this.updateChat("ERRO DE CONEXÃO: Servidor não encontrado");
 			e.printStackTrace();
 		}
+	}
+	
+	public void closeConnection(int player) {
+		try {
+			if(player >= 0) {
+				this.server.resetClients(player);
+			}
+		} catch(RemoteException e){
+			e.printStackTrace();
+		}
+		this.server = null;	
+		this.hostServer = "";
 	}
 
 	public ServerRMI getServer() {
 		return this.server;
+	}
+	
+	public String getName() {
+		return this.playerName;
 	}
 
 	public void updateChat(String msg) {

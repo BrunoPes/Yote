@@ -11,6 +11,7 @@ interface ServerRMI extends Remote {
     public void restartGame(int player) throws RemoteException;
     public void finishGame(int player) throws RemoteException;
 
+    public void resetClients(int player) throws RemoteException;
     public void registerClient(String playerName) throws RemoteException;
     public void updateChat(String msg) throws RemoteException;
 }

@@ -7,6 +7,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.rmi.RemoteException;
 
 import javax.swing.BorderFactory;
@@ -15,7 +17,6 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -23,7 +24,7 @@ import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.text.DefaultCaret;
 
-class ClientUI extends JFrame implements MouseListener, KeyListener {
+class ClientUI extends JFrame implements MouseListener, KeyListener, WindowListener {
     private static final long serialVersionUID = 1L;
     private Client client;
 
@@ -41,7 +42,8 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
     private JPanel gameBoard;
     private JTextArea chat;
     private JTextField input;
-    private JTextField hostInput;
+    private JTextField clientInput;
+    private JTextField serverInput;
     private JButton connect;
     private JButton forfeit;
     private JButton restart;
@@ -59,6 +61,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         this.setBounds(100, 100, width, height);
         this.getContentPane().setLayout(null);
         this.setResizable(false);
+        this.addWindowListener(this);
 
         this.gameBoard = new JPanel(new GridLayout(5, 6, 0, 0));
         this.gameBoard.setBounds(0,0,600, height-28);
@@ -80,11 +83,17 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
             }
         }
 
-        JLabel labelIP = new JLabel("Escreva o IP do servidor");
-        labelIP.setAlignmentX(Component.LEFT_ALIGNMENT);
-        this.hostInput = new JTextField();
-        this.hostInput.setMaximumSize(new Dimension(292, 20));
-        this.hostInput.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel labelClient = new JLabel("Nome do jogador");
+        labelClient.setAlignmentX(Component.LEFT_ALIGNMENT);
+        this.clientInput = new JTextField();
+        this.clientInput.setMaximumSize(new Dimension(292, 20));
+        this.clientInput.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel labelServer = new JLabel("Nome do servidor");
+        labelServer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        this.serverInput = new JTextField();
+        this.serverInput.setMaximumSize(new Dimension(292, 20));
+        this.serverInput.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         this.connect = new JButton("Conectar");
         this.forfeit = new JButton("Desistir");
         this.restart = new JButton("Reiniciar");
@@ -103,9 +112,11 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         buttons.add(this.forfeit);
         JPanel buttonsPanel = new JPanel();
         buttonsPanel.setLayout(new BoxLayout(buttonsPanel, BoxLayout.Y_AXIS));
-        buttonsPanel.setMaximumSize(new Dimension(292, 70));
-        buttonsPanel.add(labelIP);
-        buttonsPanel.add(this.hostInput);
+        buttonsPanel.setMaximumSize(new Dimension(292, 100));
+        buttonsPanel.add(labelClient);
+        buttonsPanel.add(this.clientInput);
+        buttonsPanel.add(labelServer);
+        buttonsPanel.add(this.serverInput);
         buttonsPanel.add(buttons);
         buttonsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -193,7 +204,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         this.selected = null;
         this.playersQnt = new int[]{12,12};
 
-        this.chat.setText("");
+        //this.chat.setText("");
         this.input.setText("");
         for(Component comp : this.gameBoard.getComponents()) {
             if(comp instanceof JPanel) {
@@ -220,7 +231,8 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
     }
 
     public void updateButtons(boolean connectEnabled) {
-        this.hostInput.setEnabled(connectEnabled);
+        this.clientInput.setEnabled(connectEnabled);
+        this.serverInput.setEnabled(connectEnabled);
         this.forfeit.setEnabled(!connectEnabled);
         this.restart.setEnabled(!connectEnabled);
         this.connect.setEnabled(connectEnabled);
@@ -232,22 +244,18 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
     public void finishGame(int winPlayer, int giveUpPlayer, boolean shouldResetUI) {
         if(shouldResetUI) this.resetStateAndUI();
 
-        String msg;
+        String msg = "";
         if(giveUpPlayer >= 0) {
             msg = this.id == giveUpPlayer ? "Você perdeu por desistência" : "Parabéns, você venceu! Seu oponente desistiu!";
-//            this.client.closeSocketClient();
+            this.updateButtons(true);
+            this.client.closeConnection(-1);
         } else if(winPlayer < 2) {
             msg = this.id == winPlayer ? "Parabéns, você venceu!" : "Você perdeu :(";
         } else {
             msg = "Empate! Nesse jogo não haverá vencedores.";
         }
-        
-        try{
-//          JOptionPane.showMessageDialog(this, msg, "Fim de Jogo", JOptionPane.INFORMATION_MESSAGE);   
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        
+
+        this.updateChat(msg);
         this.requestFocus();
     }
 
@@ -318,7 +326,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         if(this.id == player) {
             System.out.println("Pode multikill");
             Component moved = this.getFieldInPos(this.selected[0], this.selected[1]).getComponent(0);
-            
+
             if(moved != null && moved instanceof Piece) {
                 this.shouldKill = false;
                 this.shouldContinue = true;
@@ -354,7 +362,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
 
     public void restartGame(int player) {
         System.out.println("Player: " + player);
-        this.finishGame(player, -1, true);        
+        this.finishGame(player, -1, true);
         this.isMyTurn = (this.id == player);
         this.changeTurn(player);
     }
@@ -386,7 +394,7 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
             } else if(keyCode == 10) {
                 String msg = this.input.getText();
                 if(msg.length() > 0) {
-                    this.client.getServer().updateChat("Player "+(this.id+1) + ": " + msg);
+                    this.client.getServer().updateChat(this.client.getName() + ": " + msg);
                     this.input.setText("");
                     this.requestFocus();
                 }
@@ -403,11 +411,15 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
                 JButton button = (JButton)e.getSource();
                 switch(button.getText()) {
                     case "Conectar":
-                        // String host = this.hostInput.getText();
-                        String name = this.hostInput.getText();
-                        if(name.length() > 0) {
-                            System.out.println("Conectou o cliente!");
-                            this.client = new Client(this, name);
+                        String client = this.clientInput.getText();
+                        String host = this.serverInput.getText();
+                        if(host.length() > 0 && client.length() > 0) {
+                            host = host.replace(" ", "").toLowerCase();
+                            client = client.replace(" ", "");
+                            this.clientInput.setText(client);
+                            this.serverInput.setText(host);
+
+                            this.client = new Client(this, host, client);
                         }
                         break;
                     case "Desistir":
@@ -422,12 +434,12 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
                         break;
                     default: break;
                 }
-            } else if(this.isMyTurn) {
+            } else if(this.isMyTurn && !this.canRestart) {
                 JPanel clickedField = ((JPanel)e.getSource());
                 Piece selectedPiece = clickedField.getComponentCount() > 0 ? (Piece)clickedField.getComponent(0) : null;
                 String strPos = clickedField.getName();
                 int[] pos = {new Integer(strPos.substring(0, 1)), new Integer(strPos.substring(1))};
-    
+
                 if(!this.shouldKill && !this.shouldContinue) {
                     if(this.selected == null && clickedField.getComponentCount() == 0) {
                         this.client.getServer().insertPiece(this.id, pos);
@@ -455,12 +467,25 @@ class ClientUI extends JFrame implements MouseListener, KeyListener {
         }
     }
 
+    public void windowClosing(WindowEvent e) {
+        if(!this.connect.isEnabled()) {
+            System.out.println("Closing Window");
+            this.client.closeConnection(this.id);
+        }
+    }
+
     public void keyReleased(KeyEvent e) {}
     public void keyTyped(KeyEvent e) {}
     public void mouseEntered(MouseEvent e) {}
     public void mouseExited(MouseEvent e) {}
     public void mouseClicked(MouseEvent e) {}
     public void mouseReleased(MouseEvent e) {}
+    public void windowActivated(WindowEvent e) {}
+    public void windowClosed(WindowEvent e) {}
+    public void windowDeactivated(WindowEvent e) {}
+    public void windowDeiconified(WindowEvent e) {}
+    public void windowIconified(WindowEvent e) {}
+    public void windowOpened(WindowEvent e) {}
 
     public static void main(String[] args) {
         new ClientUI(900, 550);
