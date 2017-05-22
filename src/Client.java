@@ -1,22 +1,23 @@
-import java.io.IOException;
-import java.net.ConnectException;
-import java.rmi.*;
+import java.rmi.Naming;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 
 import javax.swing.JOptionPane;
 
 class Client extends UnicastRemoteObject implements ClientRMI {
+	private static final long serialVersionUID = 1L;
 	private String hostName;
 	private String hostServer;
 	private ClientUI clientGame;
 	private ServerRMI server;
 
-	public Client(ClientUI game, String playerName) {
+	public Client(ClientUI game, String playerName) throws RemoteException {
 		this.clientGame = game;
-		this.hostName = playerName;
+		this.hostName = "//localhost/" + playerName;
 
 		try {
-            Naming.rebind("//localhost/" + this.hostName, this);
-            System.out.println("Servidor Registrado!");
+            Naming.rebind(this.hostName, this);
+            System.out.println("Cliente "+ this.hostName +" Registrado!");
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -30,36 +31,35 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 		try {
 			this.server = (ServerRMI) Naming.lookup(this.hostServer);
         	System.out.println("Objeto Localizado!");
+        	this.server.registerClient(this.hostName);
 			this.clientGame.requestFocus();
-		} catch(ConnectException e) {
+		} catch(RemoteException e) {
 			String errorMsg = "Verifique se o servidor está online e se a URL inserida está correta";
-			JOptionPane.showMessageDialog(this.clientGame, errorMsg, "Não foi possível conectar-se ao Servidor", JOptionPane.ERROR_MESSAGE);
+			JOptionPane.showMessageDialog(this.clientGame, errorMsg, "Não foi possí­vel conectar-se ao Servidor", JOptionPane.ERROR_MESSAGE);
 			e.printStackTrace();
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
 	}
 
-	public void getServer() {
+	public ServerRMI getServer() {
 		return this.server;
 	}
 
 	public void updateChat(String msg) {
-		if(chatMsg != null)
-			this.clientGame.updateChat(msg);
+		if(msg != null) this.clientGame.updateChat(msg);
 	}
 
 	public void insertPiece(int player, int[] pos) {
-		this.clientGame.insertPiece();
+		this.clientGame.insertPiece(player, pos);
 	}
 
 	public void killPiece(int player) {
-		this.clientGame.killPiece(player, pos);
+		this.clientGame.killPiece(player);
 	}
 
-	public void multkillPiece(int player, int[] pos) {
-		if(this.clientGame.multkillPiece(player, pos))
-			this.ServerRMI.changeTurn();
+	public void multkillPiece(int player) {
+		this.clientGame.multkillPiece(player);
 	}
 
 	public void removePiece(int player, int[] pos) {
@@ -87,6 +87,7 @@ class Client extends UnicastRemoteObject implements ClientRMI {
 	}
 
 	public void playerWin(int player) {
+		System.out.println("Player WON!:" + player);
 		this.clientGame.playerWin(player);
 	}
 

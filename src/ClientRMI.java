@@ -16,5 +16,4 @@ interface ClientRMI extends Remote {
     public void gameOver(int player) throws RemoteException;
 
     public void updateChat(String msg) throws RemoteException;
-    public void registerClient(String playerName, int id) throws RemoteException;
 }
